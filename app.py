@@ -33,8 +33,8 @@ import sys
 # APPLICATION CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
-VERSION = "2.0.1"
-BUILD = "2025.07.FIX"
+VERSION = "2.0.2"
+BUILD = "2026.02.FIX"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
 COMPANY = "Hemrek Capital"
@@ -837,7 +837,7 @@ def page_dashboard():
                 xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='', showticklabels=False),
                 yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
                 margin=dict(l=10, r=100, t=65, b=30))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, on_container_width=True)
 
         # ── Chart 2: Account Composition ──
         with ch2:
@@ -857,7 +857,7 @@ def page_dashboard():
                 legend=dict(orientation='h', yanchor='top', y=-0.12, xanchor='left', x=0,
                     font=dict(size=9), bgcolor='rgba(0,0,0,0)'),
                 margin=dict(l=10, r=20, t=65, b=80))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, on_container_width=True)
 
         ch3, ch4 = st.columns(2)
 
@@ -875,12 +875,12 @@ def page_dashboard():
                     hovertemplate="<b>%{text}</b><br>Duration: %{x:.2f}y<br>YTC: %{y:.2f}%<extra></extra>"))
             fig.update_layout(**CL, title=dict(text="Yield vs Duration", font=dict(size=13, color='#888'), x=0, y=0.97, yanchor='top'),
                 height=380,
-                xaxis=dict(title='Modified Duration (y)', gridcolor='rgba(255,255,255,0.05)', titlefont=dict(size=11, color='#888')),
-                yaxis=dict(title='Yield to Cost (%)', gridcolor='rgba(255,255,255,0.05)', titlefont=dict(size=11, color='#888')),
+                xaxis=dict(title=dict(text='Modified Duration (y)', font=dict(size=11, color='#888')), gridcolor='rgba(255,255,255,0.05)'),
+                yaxis=dict(title=dict(text='Yield to Cost (%)', font=dict(size=11, color='#888')), gridcolor='rgba(255,255,255,0.05)'),
                 legend=dict(orientation='h', yanchor='top', y=-0.15, xanchor='left', x=0,
                     font=dict(size=10), bgcolor='rgba(0,0,0,0)'),
                 margin=dict(l=50, r=20, t=65, b=65))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, on_container_width=True)
 
         # ── Chart 4: Annual Income Contribution ──
         with ch4:
@@ -899,7 +899,7 @@ def page_dashboard():
                 xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='', showticklabels=False),
                 yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
                 margin=dict(l=10, r=100, t=65, b=30))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, on_container_width=True)
 
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         st.markdown("#### Concentration Risk")
@@ -953,7 +953,7 @@ def page_dashboard():
             xaxis=dict(gridcolor='rgba(255,255,255,0.05)'), yaxis=dict(gridcolor='rgba(255,255,255,0.05)',title=''),
             legend=dict(orientation='h',yanchor='top',y=-0.1,xanchor='left',x=0,font=dict(size=10),bgcolor='rgba(0,0,0,0)'),
             margin=dict(l=40, r=20, t=65, b=55))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, on_container_width=True)
 
         rows=""
         for b in bo:
@@ -983,7 +983,7 @@ def page_dashboard():
                 xaxis=dict(gridcolor='rgba(255,255,255,0.05)',tickangle=-45),yaxis=dict(gridcolor='rgba(255,255,255,0.05)',title=''),
                 legend=dict(orientation='h',yanchor='top',y=-0.18,xanchor='left',x=0,font=dict(size=10),bgcolor='rgba(0,0,0,0)'),
                 margin=dict(l=40, r=20, t=65, b=70))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, on_container_width=True)
 
             tc=cdf['coupon'].sum(); tp=cdf['principal'].sum()
             s1,s2,s3=st.columns(3)
