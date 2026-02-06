@@ -33,8 +33,8 @@ import sys
 # APPLICATION CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
-VERSION = "2.0.0"
-BUILD = "2025.07"
+VERSION = "2.0.1"
+BUILD = "2025.07.FIX"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
 COMPANY = "Hemrek Capital"
@@ -770,9 +770,13 @@ def get_positions_dataframe():
 # CHART CONFIG
 # ═══════════════════════════════════════════════════════════════════════
 
-CL = dict(template='plotly_dark', plot_bgcolor='rgba(0,0,0,0)',
-          paper_bgcolor='rgba(0,0,0,0)', font=dict(color="#EAEAEA", family="Inter"),
-          margin=dict(l=40, r=20, t=65, b=45))
+# Note: 'margin' removed from CL to avoid keyword duplication errors
+CL = dict(
+    template='plotly_dark',
+    plot_bgcolor='rgba(0,0,0,0)',
+    paper_bgcolor='rgba(0,0,0,0)',
+    font=dict(color="#EAEAEA", family="Inter")
+)
 CC = ['#FFC300','#10b981','#06b6d4','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1']
 
 
@@ -807,13 +811,12 @@ def page_dashboard():
     with tab1:
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
-        # Pre-compute weighted columns for concentration table reuse
         df['ny_c'] = df['nominal_yield']*df['cost_basis']
         df['ytc_c'] = df['yield_to_cost']*df['cost_basis']
 
         ch1, ch2 = st.columns(2)
 
-        # ── Chart 1: Issuer Concentration — Horizontal bar ranked by weight ──
+        # ── Chart 1: Issuer Concentration ──
         with ch1:
             ia = df.groupby('issuer')['cost_basis'].sum().sort_values(ascending=True)
             wts = ia / T['Total Cost Basis'] if T['Total Cost Basis'] > 0 else ia * 0
@@ -824,7 +827,6 @@ def page_dashboard():
                 text=[f"{fmt_inr_short(v)}  ({w:.0%})" for v, w in zip(ia.values, wts)],
                 textposition='outside', textfont=dict(size=10, color='#EAEAEA'),
                 hovertemplate="<b>%{y}</b><br>Cost: ₹%{x:,.0f}<extra></extra>"))
-            # Add threshold reference lines
             if T['Total Cost Basis'] > 0:
                 fig.add_vline(x=T['Total Cost Basis']*0.25, line=dict(color='#ef4444', width=1, dash='dot'),
                     annotation=dict(text="25%", font=dict(color='#ef4444', size=9), showarrow=False, yshift=10))
@@ -837,7 +839,7 @@ def page_dashboard():
                 margin=dict(l=10, r=100, t=65, b=30))
             st.plotly_chart(fig, use_container_width=True)
 
-        # ── Chart 2: Account Composition — Stacked horizontal bars by issuer per account ──
+        # ── Chart 2: Account Composition ──
         with ch2:
             ac = df.groupby(['account', 'issuer'])['cost_basis'].sum().unstack(fill_value=0)
             fig = go.Figure()
@@ -859,7 +861,7 @@ def page_dashboard():
 
         ch3, ch4 = st.columns(2)
 
-        # ── Chart 3: Yield vs Duration Scatter — bubble = position size, colored by account ──
+        # ── Chart 3: Yield vs Duration ──
         with ch3:
             fig = go.Figure()
             for idx, a in enumerate(df['account'].unique()):
@@ -880,12 +882,10 @@ def page_dashboard():
                 margin=dict(l=50, r=20, t=65, b=65))
             st.plotly_chart(fig, use_container_width=True)
 
-        # ── Chart 4: Annual Income Contribution — Horizontal bar by issuer ──
+        # ── Chart 4: Annual Income Contribution ──
         with ch4:
             inc = df.groupby('issuer')['annual_coupon_income'].sum().sort_values(ascending=True)
             inc_pct = inc / inc.sum() if inc.sum() > 0 else inc * 0
-            # Cumulative % for Pareto insight
-            cum = inc_pct.cumsum()
             fig = go.Figure()
             fig.add_trace(go.Bar(
                 y=inc.index, x=inc.values, orientation='h',
@@ -901,7 +901,6 @@ def page_dashboard():
                 margin=dict(l=10, r=100, t=65, b=30))
             st.plotly_chart(fig, use_container_width=True)
 
-        # Concentration table
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         st.markdown("#### Concentration Risk")
         ir = df.groupby('issuer').agg(Cost=('cost_basis','sum'), Face=('position_face_value','sum'),
