@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  nivesa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nivesa
+    ports:
+      - "8501:8501"
+    volumes:
+      # Persist database and logs across container restarts
+      - nivesa_data:/app/data
+    environment:
+      - NIVESA_DATA_DIR=/app/data
+    restart: unless-stopped
+
+volumes:
+  nivesa_data:
+    driver: local
