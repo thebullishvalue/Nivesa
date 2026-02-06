@@ -33,8 +33,8 @@ import sys
 # APPLICATION CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
-VERSION = "2.0.2"
-BUILD = "2026.02.FIX"
+VERSION = "2.0.3"
+BUILD = "2026.02.UI"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
 COMPANY = "Hemrek Capital"
@@ -814,92 +814,53 @@ def page_dashboard():
         df['ny_c'] = df['nominal_yield']*df['cost_basis']
         df['ytc_c'] = df['yield_to_cost']*df['cost_basis']
 
-        ch1, ch2 = st.columns(2)
+        # ── Chart 1: Issuer Concentration (Full Width, Row 1) ──
+        ia = df.groupby('issuer')['cost_basis'].sum().sort_values(ascending=True)
+        wts = ia / T['Total Cost Basis'] if T['Total Cost Basis'] > 0 else ia * 0
+        bar_colors = ['#ef4444' if w > 0.25 else '#f59e0b' if w > 0.15 else '#10b981' for w in wts]
+        fig_iss = go.Figure(go.Bar(
+            y=ia.index, x=ia.values, orientation='h',
+            marker_color=bar_colors,
+            text=[f"{fmt_inr_short(v)}  ({w:.0%})" for v, w in zip(ia.values, wts)],
+            textposition='outside', textfont=dict(size=10, color='#EAEAEA'),
+            hovertemplate="<b>%{y}</b><br>Cost: ₹%{x:,.0f}<extra></extra>"))
+        if T['Total Cost Basis'] > 0:
+            fig_iss.add_vline(x=T['Total Cost Basis']*0.25, line=dict(color='#ef4444', width=1, dash='dot'),
+                annotation=dict(text="25%", font=dict(color='#ef4444', size=9), showarrow=False, yshift=10))
+            fig_iss.add_vline(x=T['Total Cost Basis']*0.15, line=dict(color='#f59e0b', width=1, dash='dot'),
+                annotation=dict(text="15%", font=dict(color='#f59e0b', size=9), showarrow=False, yshift=10))
+        fig_iss.update_layout(**CL, title=dict(text="Issuer Concentration", font=dict(size=13, color='#888'), x=0, y=0.97, yanchor='top'),
+            height=380, showlegend=False,
+            xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='', showticklabels=False),
+            yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
+            margin=dict(l=10, r=100, t=65, b=30))
+        st.plotly_chart(fig_iss, on_container_width=True)
 
-        # ── Chart 1: Issuer Concentration ──
-        with ch1:
-            ia = df.groupby('issuer')['cost_basis'].sum().sort_values(ascending=True)
-            wts = ia / T['Total Cost Basis'] if T['Total Cost Basis'] > 0 else ia * 0
-            bar_colors = ['#ef4444' if w > 0.25 else '#f59e0b' if w > 0.15 else '#10b981' for w in wts]
-            fig = go.Figure(go.Bar(
-                y=ia.index, x=ia.values, orientation='h',
-                marker_color=bar_colors,
-                text=[f"{fmt_inr_short(v)}  ({w:.0%})" for v, w in zip(ia.values, wts)],
-                textposition='outside', textfont=dict(size=10, color='#EAEAEA'),
-                hovertemplate="<b>%{y}</b><br>Cost: ₹%{x:,.0f}<extra></extra>"))
-            if T['Total Cost Basis'] > 0:
-                fig.add_vline(x=T['Total Cost Basis']*0.25, line=dict(color='#ef4444', width=1, dash='dot'),
-                    annotation=dict(text="25%", font=dict(color='#ef4444', size=9), showarrow=False, yshift=10))
-                fig.add_vline(x=T['Total Cost Basis']*0.15, line=dict(color='#f59e0b', width=1, dash='dot'),
-                    annotation=dict(text="15%", font=dict(color='#f59e0b', size=9), showarrow=False, yshift=10))
-            fig.update_layout(**CL, title=dict(text="Issuer Concentration", font=dict(size=13, color='#888'), x=0, y=0.97, yanchor='top'),
-                height=380, showlegend=False,
-                xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='', showticklabels=False),
-                yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
-                margin=dict(l=10, r=100, t=65, b=30))
-            st.plotly_chart(fig, on_container_width=True)
-
-        # ── Chart 2: Account Composition ──
-        with ch2:
-            ac = df.groupby(['account', 'issuer'])['cost_basis'].sum().unstack(fill_value=0)
-            fig = go.Figure()
-            issuers_ranked = df.groupby('issuer')['cost_basis'].sum().sort_values(ascending=False).index.tolist()
-            for i, iss in enumerate(issuers_ranked):
-                if iss in ac.columns:
-                    fig.add_trace(go.Bar(
-                        y=ac.index, x=ac[iss], name=iss, orientation='h',
-                        marker_color=CC[i % len(CC)],
-                        hovertemplate=f"<b>{iss}</b><br>₹%{{x:,.0f}}<extra></extra>"))
-            fig.update_layout(**CL, title=dict(text="Account Composition by Issuer", font=dict(size=13, color='#888'), x=0, y=0.97, yanchor='top'),
-                height=380, barmode='stack',
-                xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title=''),
-                yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
-                legend=dict(orientation='h', yanchor='top', y=-0.12, xanchor='left', x=0,
-                    font=dict(size=9), bgcolor='rgba(0,0,0,0)'),
-                margin=dict(l=10, r=20, t=65, b=80))
-            st.plotly_chart(fig, on_container_width=True)
-
-        ch3, ch4 = st.columns(2)
-
-        # ── Chart 3: Yield vs Duration ──
-        with ch3:
-            fig = go.Figure()
-            for idx, a in enumerate(df['account'].unique()):
-                ad = df[df['account'] == a]
-                fig.add_trace(go.Scatter(
-                    x=ad['modified_duration'], y=ad['yield_to_cost']*100,
-                    mode='markers', name=a,
-                    marker=dict(size=ad['cost_basis']/df['cost_basis'].max()*30+8, opacity=0.8,
-                        color=CC[idx % len(CC)], line=dict(width=1, color='rgba(255,255,255,0.2)')),
-                    text=ad['issuer'],
-                    hovertemplate="<b>%{text}</b><br>Duration: %{x:.2f}y<br>YTC: %{y:.2f}%<extra></extra>"))
-            fig.update_layout(**CL, title=dict(text="Yield vs Duration", font=dict(size=13, color='#888'), x=0, y=0.97, yanchor='top'),
-                height=380,
-                xaxis=dict(title=dict(text='Modified Duration (y)', font=dict(size=11, color='#888')), gridcolor='rgba(255,255,255,0.05)'),
-                yaxis=dict(title=dict(text='Yield to Cost (%)', font=dict(size=11, color='#888')), gridcolor='rgba(255,255,255,0.05)'),
-                legend=dict(orientation='h', yanchor='top', y=-0.15, xanchor='left', x=0,
-                    font=dict(size=10), bgcolor='rgba(0,0,0,0)'),
-                margin=dict(l=50, r=20, t=65, b=65))
-            st.plotly_chart(fig, on_container_width=True)
-
-        # ── Chart 4: Annual Income Contribution ──
-        with ch4:
-            inc = df.groupby('issuer')['annual_coupon_income'].sum().sort_values(ascending=True)
-            inc_pct = inc / inc.sum() if inc.sum() > 0 else inc * 0
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                y=inc.index, x=inc.values, orientation='h',
-                marker=dict(color=inc.values, colorscale=[[0,'#06b6d4'],[0.5,'#FFC300'],[1,'#10b981']],
-                    line=dict(width=0)),
-                text=[f"{fmt_inr_short(v)}  ({p:.0%})" for v, p in zip(inc.values, inc_pct)],
-                textposition='outside', textfont=dict(size=10, color='#EAEAEA'),
-                hovertemplate="<b>%{y}</b><br>Annual Income: ₹%{x:,.0f}<extra></extra>"))
-            fig.update_layout(**CL, title=dict(text="Annual Coupon Income by Issuer", font=dict(size=13, color='#888'), x=0, y=0.97, yanchor='top'),
-                height=380, showlegend=False,
-                xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='', showticklabels=False),
-                yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
-                margin=dict(l=10, r=100, t=65, b=30))
-            st.plotly_chart(fig, on_container_width=True)
+        # ── Chart 2: Account Composition (Full Width, Row 2) ──
+        ac = df.groupby(['account', 'issuer'])['cost_basis'].sum().unstack(fill_value=0)
+        fig_acct = go.Figure()
+        issuers_ranked = df.groupby('issuer')['cost_basis'].sum().sort_values(ascending=False).index.tolist()
+        for i, iss in enumerate(issuers_ranked):
+            if iss in ac.columns:
+                fig_acct.add_trace(go.Bar(
+                    y=ac.index, x=ac[iss], name=iss, orientation='h',
+                    marker_color=CC[i % len(CC)],
+                    hovertemplate=f"<b>{iss}</b><br>₹%{{x:,.0f}}<extra></extra>"))
+        fig_acct.update_layout(**CL, title=dict(text="Account Composition by Issuer", font=dict(size=13, color='#888'), x=0, y=0.97, yanchor='top'),
+            height=380, barmode='stack',
+            xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title=''),
+            yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
+            legend=dict(
+                orientation='v', 
+                yanchor='top', y=0.95, 
+                xanchor='right', x=0.98,
+                font=dict(size=10), 
+                bgcolor='rgba(26,26,26,0.8)',
+                bordercolor='rgba(255,255,255,0.1)',
+                borderwidth=1
+            ),
+            margin=dict(l=10, r=20, t=65, b=30))
+        st.plotly_chart(fig_acct, on_container_width=True)
 
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         st.markdown("#### Concentration Risk")
