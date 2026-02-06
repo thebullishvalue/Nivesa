@@ -33,8 +33,8 @@ import sys
 # APPLICATION CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
-VERSION = "2.0.3"
-BUILD = "2026.02.UI"
+VERSION = "2.0.4"
+BUILD = "2026.02.ULTRA"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
 COMPANY = "Hemrek Capital"
@@ -816,19 +816,19 @@ def page_dashboard():
 
         # ── Chart 1: Issuer Concentration (Full Width, Row 1) ──
         ia = df.groupby('issuer')['cost_basis'].sum().sort_values(ascending=True)
-        wts = ia / T['Total Cost Basis'] if T['Total Cost Basis'] > 0 else ia * 0
-        bar_colors = ['#ef4444' if w > 0.25 else '#f59e0b' if w > 0.15 else '#10b981' for w in wts]
+        wts_iss = ia / T['Total Cost Basis'] if T['Total Cost Basis'] > 0 else ia * 0
+        bar_colors_iss = ['#ef4444' if w > 0.15 else '#f59e0b' if w > 0.10 else '#10b981' for w in wts_iss]
         fig_iss = go.Figure(go.Bar(
             y=ia.index, x=ia.values, orientation='h',
-            marker_color=bar_colors,
-            text=[f"{fmt_inr_short(v)}  ({w:.0%})" for v, w in zip(ia.values, wts)],
+            marker_color=bar_colors_iss,
+            text=[f"{fmt_inr_short(v)}  ({w:.0%})" for v, w in zip(ia.values, wts_iss)],
             textposition='outside', textfont=dict(size=10, color='#EAEAEA'),
             hovertemplate="<b>%{y}</b><br>Cost: ₹%{x:,.0f}<extra></extra>"))
         if T['Total Cost Basis'] > 0:
-            fig_iss.add_vline(x=T['Total Cost Basis']*0.25, line=dict(color='#ef4444', width=1, dash='dot'),
-                annotation=dict(text="25%", font=dict(color='#ef4444', size=9), showarrow=False, yshift=10))
-            fig_iss.add_vline(x=T['Total Cost Basis']*0.15, line=dict(color='#f59e0b', width=1, dash='dot'),
-                annotation=dict(text="15%", font=dict(color='#f59e0b', size=9), showarrow=False, yshift=10))
+            fig_iss.add_vline(x=T['Total Cost Basis']*0.15, line=dict(color='#ef4444', width=1, dash='dot'),
+                annotation=dict(text="15%", font=dict(color='#ef4444', size=9), showarrow=False, yshift=10))
+            fig_iss.add_vline(x=T['Total Cost Basis']*0.10, line=dict(color='#f59e0b', width=1, dash='dot'),
+                annotation=dict(text="10%", font=dict(color='#f59e0b', size=9), showarrow=False, yshift=10))
         fig_iss.update_layout(**CL, title=dict(text="Issuer Concentration", font=dict(size=13, color='#888'), x=0, y=0.97, yanchor='top'),
             height=380, showlegend=False,
             xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='', showticklabels=False),
@@ -836,7 +836,23 @@ def page_dashboard():
             margin=dict(l=10, r=100, t=65, b=30))
         st.plotly_chart(fig_iss, on_container_width=True)
 
-        # ── Chart 2: Account Composition (Full Width, Row 2) ──
+        # ── Chart 2: Account Concentration (Full Width, Row 2) ──
+        aa = df.groupby('account')['cost_basis'].sum().sort_values(ascending=True)
+        wts_acc = aa / T['Total Cost Basis'] if T['Total Cost Basis'] > 0 else aa * 0
+        fig_acc_conc = go.Figure(go.Bar(
+            y=aa.index, x=aa.values, orientation='h',
+            marker_color='#06b6d4',
+            text=[f"{fmt_inr_short(v)}  ({w:.0%})" for v, w in zip(aa.values, wts_acc)],
+            textposition='outside', textfont=dict(size=10, color='#EAEAEA'),
+            hovertemplate="<b>%{y}</b><br>Cost: ₹%{x:,.0f}<extra></extra>"))
+        fig_acc_conc.update_layout(**CL, title=dict(text="Account Concentration", font=dict(size=13, color='#888'), x=0, y=0.97, yanchor='top'),
+            height=300, showlegend=False,
+            xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='', showticklabels=False),
+            yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
+            margin=dict(l=10, r=100, t=65, b=30))
+        st.plotly_chart(fig_acc_conc, on_container_width=True)
+
+        # ── Chart 3: Account Composition (Full Width, Row 3) ──
         ac = df.groupby(['account', 'issuer'])['cost_basis'].sum().unstack(fill_value=0)
         fig_acct = go.Figure()
         issuers_ranked = df.groupby('issuer')['cost_basis'].sum().sort_values(ascending=False).index.tolist()
@@ -847,19 +863,17 @@ def page_dashboard():
                     marker_color=CC[i % len(CC)],
                     hovertemplate=f"<b>{iss}</b><br>₹%{{x:,.0f}}<extra></extra>"))
         fig_acct.update_layout(**CL, title=dict(text="Account Composition by Issuer", font=dict(size=13, color='#888'), x=0, y=0.97, yanchor='top'),
-            height=380, barmode='stack',
+            height=450, barmode='stack',
             xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title=''),
             yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
             legend=dict(
-                orientation='v', 
-                yanchor='top', y=0.95, 
-                xanchor='right', x=0.98,
-                font=dict(size=10), 
-                bgcolor='rgba(26,26,26,0.8)',
-                bordercolor='rgba(255,255,255,0.1)',
-                borderwidth=1
+                orientation='h', 
+                yanchor='bottom', y=-0.3, 
+                xanchor='center', x=0.5,
+                font=dict(size=9), 
+                bgcolor='rgba(0,0,0,0)',
             ),
-            margin=dict(l=10, r=20, t=65, b=30))
+            margin=dict(l=10, r=20, t=65, b=100))
         st.plotly_chart(fig_acct, on_container_width=True)
 
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
@@ -872,7 +886,7 @@ def page_dashboard():
         ir = ir.sort_values('Cost', ascending=False)
         rows = ""
         for _,r in ir.iterrows():
-            wc = '#ef4444' if r['Wt']>.25 else '#f59e0b' if r['Wt']>.15 else '#10b981'
+            wc = '#ef4444' if r['Wt']>.15 else '#f59e0b' if r['Wt']>.10 else '#10b981'
             rows += f"<tr><td style='font-weight:600'>{r['issuer']}</td><td>{fmt_inr(r['Cost'])}</td><td>{fmt_inr(r['Face'])}</td><td><div style='display:flex;align-items:center;gap:8px'><div style='width:60px;height:6px;background:#2A2A2A;border-radius:3px;overflow:hidden'><div style='width:{r['Wt']*100:.0f}%;height:100%;background:{wc};border-radius:3px'></div></div><span>{r['Wt']:.1%}</span></div></td><td>{fmt_pct(r['NY'])}</td><td>{fmt_pct(r['YC'])}</td><td style='text-align:center'>{int(r['Pos'])}</td></tr>"
         st.markdown(f"<div class='table-container'><table class='table'><thead><tr><th>Issuer</th><th>Cost Basis</th><th>Face Value</th><th>Weight</th><th>Nominal</th><th>YTC</th><th>Pos</th></tr></thead><tbody>{rows}</tbody></table></div>", unsafe_allow_html=True)
 
