@@ -33,8 +33,8 @@ import sys
 # APPLICATION CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
-VERSION = "2.0.8"
-BUILD = "2026.02.DESIGN_FIX"
+VERSION = "2.0.9"
+BUILD = "2026.02.TREEMAP_ONLY"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
 COMPANY = "Hemrek Capital"
@@ -814,82 +814,53 @@ def page_dashboard():
         df['ny_c'] = df['nominal_yield']*df['cost_basis']
         df['ytc_c'] = df['yield_to_cost']*df['cost_basis']
 
-        # ── Row 1: Capital Allocation (Donut + Table) ──
-        aa = df.groupby('account')['cost_basis'].sum().sort_values(ascending=False)
-        total_aum = T['Total Cost Basis']
+        # Prepare unified dataset for charts (non-zero cost)
+        sb = df[df['cost_basis'] > 0].copy()
         
-        if not aa.empty:
-            colors_map = {acc: CC[i % len(CC)] for i, acc in enumerate(aa.index)}
-            
-            tbl_header = ["<b>Account</b>", "<b>Cost Basis</b>", "<b>% AUM</b>"]
-            tbl_values = [
-                [f"<b>{acc}</b>" for acc in aa.index], # Bold account names
-                [fmt_inr_short(x) for x in aa.values],
-                [f"{x/total_aum:.1%}" for x in aa.values]
-            ]
-            
-            fig_alloc = make_subplots(
-                rows=1, cols=2,
-                column_widths=[0.35, 0.65],
-                specs=[[{'type': 'domain'}, {'type': 'table'}]],
-                horizontal_spacing=0.08
-            )
-            
-            # Donut Chart
-            fig_alloc.add_trace(go.Pie(
-                labels=aa.index, 
-                values=aa.values,
-                hole=0.7, # Thinner ring looks more modern
-                textinfo='none', # Clean look, rely on hover and table
-                hoverinfo='label+value+percent',
-                marker=dict(colors=[colors_map[x] for x in aa.index], line=dict(color='#1A1A1A', width=3)),
-                showlegend=False
-            ), row=1, col=1)
-            
-            # Table
-            fig_alloc.add_trace(go.Table(
-                header=dict(
-                    values=tbl_header,
-                    fill_color='#2A2A2A',
-                    align=['left', 'right', 'right'],
-                    font=dict(color='#FFC300', size=12, family='Inter'),
-                    height=32,
-                    line_width=0
-                ),
-                cells=dict(
-                    values=tbl_values,
-                    fill_color='rgba(0,0,0,0)',
-                    align=['left', 'right', 'right'],
-                    font=dict(color='#EAEAEA', size=13, family='Inter'),
-                    height=32,
-                    line=dict(color='#2A2A2A', width=1)
-                )
-            ), row=1, col=2)
+        # Define consistent color map for accounts
+        if not sb.empty:
+            unique_accounts = sorted(sb['account'].unique())
+            colors_map = {acc: CC[i % len(CC)] for i, acc in enumerate(unique_accounts)}
+        else:
+            colors_map = {}
 
-            # Center Text
-            fig_alloc.add_annotation(
-                text="AUM", x=0.175, y=0.55, showarrow=False, font=dict(size=12, color='#888')
+        # ── Row 1: Capital Allocation (TreeMap) ──
+        if not sb.empty:
+            fig_alloc = px.treemap(
+                sb,
+                path=[px.Constant("Total Portfolio"), 'account'],
+                values='cost_basis',
+                color='account',
+                color_discrete_map=colors_map,
+                color_discrete_sequence=CC
             )
-            fig_alloc.add_annotation(
-                text=fmt_inr_short(total_aum), x=0.175, y=0.45, showarrow=False, font=dict(size=16, color='#EAEAEA', weight='bold')
+            
+            fig_alloc.update_traces(
+                root_color="#1A1A1A",
+                textinfo="label+value+percent root",
+                textfont=dict(family='Inter', size=16),
+                marker=dict(
+                    line=dict(color='#0F0F0F', width=2),
+                    pad=dict(t=5, l=5, r=5, b=5)
+                ),
+                hovertemplate='<b>%{label}</b><br>Amount: ₹%{value:,.0f}<br>Share: %{percentRoot:.1%}<extra></extra>'
             )
 
             fig_alloc.update_layout(**CL,
-                title=dict(text="Capital Allocation", font=dict(size=15, color='#EAEAEA'), x=0, y=0.98),
-                height=320,
-                margin=dict(l=10, r=10, t=40, b=10)
+                title=dict(text="Capital Allocation (By Account)", font=dict(size=15, color='#EAEAEA'), x=0, y=0.98),
+                height=350,
+                margin=dict(l=0, r=0, t=40, b=0)
             )
             st.plotly_chart(fig_alloc, on_container_width=True)
 
         # ── Row 2: Portfolio Hierarchy (TreeMap) ──
-        sb = df[df['cost_basis'] > 0].copy()
         if not sb.empty:
             fig_tree = px.treemap(
                 sb, 
                 path=[px.Constant("All Accounts"), 'account', 'issuer'], 
                 values='cost_basis',
                 color='account',
-                color_discrete_map=colors_map if 'colors_map' in locals() else None, 
+                color_discrete_map=colors_map,
                 color_discrete_sequence=CC
             )
             
