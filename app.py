@@ -33,8 +33,8 @@ import sys
 # APPLICATION CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
-VERSION = "2.0.5"
-BUILD = "2026.02.REIMAGINE"
+VERSION = "2.0.6"
+BUILD = "2026.02.LAYOUT_FIX"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
 COMPANY = "Hemrek Capital"
@@ -837,8 +837,8 @@ def page_dashboard():
 
                 fig_acc.update_layout(**CL, 
                     title=dict(text="Capital Allocation", font=dict(size=14, color='#EAEAEA'), x=0, y=0.95),
-                    height=380, showlegend=False,
-                    margin=dict(l=20, r=20, t=50, b=20)
+                    height=450, showlegend=False,
+                    margin=dict(l=50, r=50, t=80, b=50)
                 )
                 st.plotly_chart(fig_acc, on_container_width=True)
 
@@ -862,8 +862,8 @@ def page_dashboard():
                 )
                 fig_sun.update_layout(**CL,
                     title=dict(text="Portfolio Hierarchy", font=dict(size=14, color='#EAEAEA'), x=0, y=0.95),
-                    height=380,
-                    margin=dict(l=0, r=0, t=50, b=0)
+                    height=450,
+                    margin=dict(l=10, r=10, t=60, b=10)
                 )
                 st.plotly_chart(fig_sun, on_container_width=True)
 
