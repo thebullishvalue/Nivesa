@@ -33,8 +33,8 @@ import sys
 # APPLICATION CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
-VERSION = "2.0.6"
-BUILD = "2026.02.LAYOUT_FIX"
+VERSION = "2.0.7"
+BUILD = "2026.02.TREEMAP"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
 COMPANY = "Hemrek Capital"
@@ -814,58 +814,97 @@ def page_dashboard():
         df['ny_c'] = df['nominal_yield']*df['cost_basis']
         df['ytc_c'] = df['yield_to_cost']*df['cost_basis']
 
-        # Create 2 columns for the new reimagined plots
-        k1, k2 = st.columns(2)
+        # ── Row 1: Capital Allocation (Donut + Table) ──
+        aa = df.groupby('account')['cost_basis'].sum().sort_values(ascending=False)
+        total_aum = T['Total Cost Basis']
+        
+        if not aa.empty:
+            # Prepare data for table
+            tbl_values = [
+                aa.index.tolist(),
+                [fmt_inr_short(x) for x in aa.values],
+                [f"{x/total_aum:.1%}" for x in aa.values]
+            ]
+            
+            fig_alloc = make_subplots(
+                rows=1, cols=2,
+                column_widths=[0.4, 0.6],
+                specs=[[{'type': 'domain'}, {'type': 'table'}]],
+                horizontal_spacing=0.05
+            )
+            
+            # Donut Chart
+            fig_alloc.add_trace(go.Pie(
+                labels=aa.index, values=aa.values,
+                hole=0.6,
+                textinfo='percent',
+                textposition='outside',
+                marker=dict(colors=CC, line=dict(color='#1A1A1A', width=2)),
+                showlegend=False,
+                textfont=dict(size=12, color='#EAEAEA')
+            ), row=1, col=1)
+            
+            # Table
+            fig_alloc.add_trace(go.Table(
+                header=dict(
+                    values=["<b>Account</b>", "<b>Cost</b>", "<b>%</b>"],
+                    fill_color='rgba(255,255,255,0.05)',
+                    align='left',
+                    font=dict(color='#888', size=11, family='Inter'),
+                    height=30
+                ),
+                cells=dict(
+                    values=tbl_values,
+                    fill_color='rgba(0,0,0,0)',
+                    align='left',
+                    font=dict(color='#EAEAEA', size=12, family='Inter'),
+                    height=28,
+                    line_color='rgba(255,255,255,0.05)'
+                )
+            ), row=1, col=2)
 
-        with k1:
-            # ── Reimagine 1: Account Concentration (Donut Chart) ──
-            aa = df.groupby('account')['cost_basis'].sum().sort_values(ascending=False)
-            if not aa.empty:
-                fig_acc = go.Figure(data=[go.Pie(
-                    labels=aa.index, 
-                    values=aa.values, 
-                    hole=0.6,
-                    textinfo='label+percent',
-                    textposition='outside',
-                    marker=dict(colors=CC, line=dict(color='#1A1A1A', width=2)),
-                    hovertemplate="<b>%{label}</b><br>₹%{value:,.0f}<br>%{percent}<extra></extra>"
-                )])
-                
-                # Add center text for total
-                fig_acc.add_annotation(text=fmt_inr_short(T['Total Cost Basis']), x=0.5, y=0.5, font_size=20, showarrow=False, font_color="#EAEAEA", font_weight="bold")
-                fig_acc.add_annotation(text="Total AUM", x=0.5, y=0.4, font_size=12, showarrow=False, font_color="#888")
+            fig_alloc.update_layout(**CL,
+                title=dict(text="Capital Allocation", font=dict(size=14, color='#EAEAEA'), x=0, y=0.95),
+                height=350,
+                margin=dict(l=10, r=10, t=50, b=10)
+            )
+            
+            # Center Text for Donut (approximate position based on domain)
+            fig_alloc.add_annotation(
+                text=fmt_inr_short(total_aum), 
+                x=0.175, y=0.5, 
+                font_size=16, showarrow=False, font_color="#EAEAEA", font_weight="bold"
+            )
+            fig_alloc.add_annotation(
+                text="AUM", 
+                x=0.175, y=0.42, 
+                font_size=10, showarrow=False, font_color="#888"
+            )
+            
+            st.plotly_chart(fig_alloc, on_container_width=True)
 
-                fig_acc.update_layout(**CL, 
-                    title=dict(text="Capital Allocation", font=dict(size=14, color='#EAEAEA'), x=0, y=0.95),
-                    height=450, showlegend=False,
-                    margin=dict(l=50, r=50, t=80, b=50)
-                )
-                st.plotly_chart(fig_acc, on_container_width=True)
-
-        with k2:
-            # ── Reimagine 2: Account Composition (Sunburst) ──
-            # We need a dataframe with Account -> Issuer -> Value
-            # Filter out zero/negative for sunburst
-            sb = df[df['cost_basis'] > 0].copy()
-            if not sb.empty:
-                fig_sun = px.sunburst(
-                    sb, 
-                    path=['account', 'issuer'], 
-                    values='cost_basis',
-                    color='account',
-                    color_discrete_sequence=CC
-                )
-                fig_sun.update_traces(
-                    textinfo="label+percent entry",
-                    insidetextorientation='radial',
-                    marker=dict(line=dict(color='#1A1A1A', width=1))
-                )
-                fig_sun.update_layout(**CL,
-                    title=dict(text="Portfolio Hierarchy", font=dict(size=14, color='#EAEAEA'), x=0, y=0.95),
-                    height=450,
-                    margin=dict(l=10, r=10, t=60, b=10)
-                )
-                st.plotly_chart(fig_sun, on_container_width=True)
+        # ── Row 2: Portfolio Hierarchy (TreeMap) ──
+        sb = df[df['cost_basis'] > 0].copy()
+        if not sb.empty:
+            fig_tree = px.treemap(
+                sb, 
+                path=[px.Constant("Portfolio"), 'account', 'issuer'], 
+                values='cost_basis',
+                color='account',
+                color_discrete_sequence=CC
+            )
+            fig_tree.update_traces(
+                root_color="rgba(0,0,0,0)",
+                textinfo="label+value+percent entry",
+                marker=dict(line=dict(color='#1A1A1A', width=1)),
+                hovertemplate='<b>%{label}</b><br>Cost: ₹%{value:,.0f}<br>%{percentRoot:.1%} of Portfolio<extra></extra>'
+            )
+            fig_tree.update_layout(**CL,
+                title=dict(text="Portfolio Hierarchy", font=dict(size=14, color='#EAEAEA'), x=0, y=0.95),
+                height=450,
+                margin=dict(l=10, r=10, t=50, b=10)
+            )
+            st.plotly_chart(fig_tree, on_container_width=True)
 
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         st.markdown("#### Concentration Risk")
@@ -876,7 +915,7 @@ def page_dashboard():
         ir['YC'] = ir.apply(lambda r: r['YC']/r['Cost'] if r['Cost']>0 else 0, axis=1)
         ir = ir.sort_values('Cost', ascending=False)
         
-        # FIX: Calculate Max Weight for relative scaling
+        # Calculate Max Weight for relative scaling
         max_wt = ir['Wt'].max() if not ir.empty and ir['Wt'].max() > 0 else 1.0
 
         rows = ""
