@@ -29,8 +29,8 @@ import os
 # APPLICATION CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
-VERSION = "2.2.0"
-BUILD = "2026.03.SESSION_STATE"
+VERSION = "2.3.0"
+BUILD = "2026.03.DATA_INTEGRITY"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
 COMPANY = "Hemrek Capital"
@@ -1264,6 +1264,8 @@ def page_add_security():
         if submitted:
             if not issuer or not isin:
                 st.error("Issuer and ISIN are required.")
+            elif not db_query("SELECT 1 FROM securities WHERE isin=?", (isin,)).empty:
+                st.error(f"ISIN **{isin}** already exists in the securities master.")
             else:
                 bid = str(uuid.uuid4())
                 ok = db_execute(
@@ -1479,14 +1481,28 @@ def page_record_transaction():
         notes = st.text_area("Notes")
 
         if st.form_submit_button("RECORD TRANSACTION"):
+            # Sell validation: check sufficient units before proceeding
+            if ttype == 'Sell':
+                held = db_query(
+                    "SELECT SUM(units) as total FROM transactions WHERE bond_id=? AND account=?",
+                    (bid, account),
+                )
+                raw = held['total'].iloc[0] if not held.empty else 0
+                available = float(raw) if pd.notna(raw) else 0.0
+                if units > available:
+                    st.error(f"Insufficient units. Available: **{available:.0f}**, trying to sell: **{units:.0f}**")
+                    st.stop()
+
             tid = str(uuid.uuid4())
             stored_units = -abs(units) if ttype == 'Sell' else abs(units)
             stored_amount = units * price if ttype in ["Buy", "Sell"] else amount
 
             # Compute per-unit adjustment for principal repayment
+            # Use total units across ALL accounts so face_value (a global security attribute)
+            # is reduced correctly regardless of how many accounts hold this bond
             adj_per_unit = 0.0
             if ttype == 'Principal_Repayment':
-                held = db_query("SELECT units FROM transactions WHERE bond_id=? AND account=?", (bid, account))
+                held = db_query("SELECT units FROM transactions WHERE bond_id=?", (bid,))
                 held_units = held['units'].sum() if not held.empty else 0.0
                 adj_per_unit = amount / held_units if held_units > 0 else 0.0
 
@@ -1554,6 +1570,8 @@ def page_edit_transaction():
 
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
+    orig_type = txn['transaction_type']
+
     with st.form("edit_txn"):
         st.markdown(f"**Transaction:** `{tid[:12]}…`")
         st.text_input("Security", value=f"{txn['issuer']} ({txn['isin']})", disabled=True)
@@ -1562,11 +1580,17 @@ def page_edit_transaction():
         with c1:
             acct = st.selectbox("Account", ACCOUNTS, index=_safe_index(ACCOUNTS, txn['account']))
             td = st.date_input("Date", max_value=date.today(), value=pd.to_datetime(txn['trade_date']).date())
-            tt = st.selectbox("Type", TRANSACTION_TYPES, index=_safe_index(TRANSACTION_TYPES, txn['transaction_type']))
+            tt = st.selectbox("Type", TRANSACTION_TYPES, index=_safe_index(TRANSACTION_TYPES, orig_type))
         with c2:
-            u = st.number_input("Units", min_value=0, step=1, value=int(abs(txn['units'])))
-            p = st.number_input("Price", min_value=0.0, format="%.4f", value=float(txn['price']))
-            a = st.number_input("Amount", min_value=0.0, format="%.2f", value=float(txn['amount']))
+            if orig_type in ["Buy", "Sell"]:
+                u = st.number_input("Units", min_value=0, step=1, value=int(abs(txn['units'])))
+                p = st.number_input("Price", min_value=0.0, format="%.4f", value=float(txn['price']))
+                a = u * p
+                st.markdown(f"**Amount: {fmt_inr(a)}**")
+            else:
+                u = 0
+                p = 0.0
+                a = st.number_input("Amount", min_value=0.0, format="%.2f", value=float(txn['amount']))
 
         notes = st.text_area("Notes", value=txn['notes'] or '')
 
@@ -1577,26 +1601,69 @@ def page_edit_transaction():
             delete_btn = st.form_submit_button("DELETE", use_container_width=True)
 
         if update_btn:
-            if tt in ["Buy", "Sell"]:
-                final_amount = u * p
-                final_price = p
-                final_units = -abs(u) if tt == 'Sell' else abs(u)
-            else:
-                final_amount = a
-                final_price = 0.0
-                final_units = 0.0
+            old_type = txn['transaction_type']
+            old_amount = float(txn['amount'])
+            bond_id = txn['bond_id']
 
-            ok = db_execute(
-                "UPDATE transactions SET account=?, trade_date=?, transaction_type=?, "
-                "units=?, price=?, amount=?, notes=? WHERE transaction_id=?",
-                (acct, td.isoformat(), tt, final_units, final_price, final_amount, notes, tid),
-            )
-            if ok:
-                st.success("Transaction updated!")
-                st.rerun()
+            # Guard: prevent changing transaction type (Bug 5)
+            if tt != old_type:
+                st.error(f"Changing transaction type from **{old_type}** to **{tt}** is not allowed. "
+                         "Delete this transaction and create a new one instead.")
+            else:
+                if tt in ["Buy", "Sell"]:
+                    final_amount = u * p
+                    final_price = p
+                    final_units = -abs(u) if tt == 'Sell' else abs(u)
+
+                    # Sell validation: ensure sufficient units
+                    if tt == 'Sell':
+                        held = db_query(
+                            "SELECT SUM(units) as total FROM transactions "
+                            "WHERE bond_id=? AND account=? AND transaction_id!=?",
+                            (bond_id, acct, tid),
+                        )
+                        raw = held['total'].iloc[0] if not held.empty else 0
+                        available = float(raw) if pd.notna(raw) else 0.0
+                        if abs(final_units) > available:
+                            st.error(f"Insufficient units. Available: **{available:.0f}**, trying to sell: **{abs(final_units):.0f}**")
+                            st.stop()
+                else:
+                    final_amount = a
+                    final_price = 0.0
+                    final_units = 0.0
+
+                ok = db_execute(
+                    "UPDATE transactions SET account=?, trade_date=?, transaction_type=?, "
+                    "units=?, price=?, amount=?, notes=? WHERE transaction_id=?",
+                    (acct, td.isoformat(), tt, final_units, final_price, final_amount, notes, tid),
+                )
+                if ok:
+                    # Reverse/adjust face value if editing a Principal_Repayment amount
+                    if old_type == 'Principal_Repayment' and final_amount != old_amount:
+                        all_held = db_query("SELECT units FROM transactions WHERE bond_id=?", (bond_id,))
+                        total_units = all_held['units'].sum() if not all_held.empty else 0.0
+                        if total_units > 0:
+                            old_adj = old_amount / total_units
+                            new_adj = final_amount / total_units
+                            diff = new_adj - old_adj
+                            if abs(diff) > 0.0001:
+                                db_execute("UPDATE securities SET face_value=face_value-? WHERE bond_id=?", (diff, bond_id))
+                    st.success("Transaction updated!")
+                    st.rerun()
 
         if delete_btn:
+            bond_id = txn['bond_id']
+            old_type = txn['transaction_type']
+            old_amount = float(txn['amount'])
+
             if db_execute("DELETE FROM transactions WHERE transaction_id=?", (tid,)):
+                # Reverse face value adjustment if deleting a Principal_Repayment
+                if old_type == 'Principal_Repayment':
+                    all_held = db_query("SELECT units FROM transactions WHERE bond_id=?", (bond_id,))
+                    total_units = all_held['units'].sum() if not all_held.empty else 0.0
+                    if total_units > 0:
+                        adj_per_unit = old_amount / total_units
+                        db_execute("UPDATE securities SET face_value=face_value+? WHERE bond_id=?", (adj_per_unit, bond_id))
                 st.success("Transaction deleted!")
                 st.rerun()
 
