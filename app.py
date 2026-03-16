@@ -912,61 +912,7 @@ def page_dashboard():
             )
             st.plotly_chart(fig_tree, use_container_width=True)
 
-            # ── Row 2: Credit Quality + Sector Allocation side-by-side ──
-            col_credit, col_sector = st.columns(2)
-
-            with col_credit:
-                rating_order = [r for r in CREDIT_RATINGS if r in sb['credit_rating'].values]
-                cr_agg = sb.groupby('credit_rating')['cost_basis'].sum().reindex(rating_order).dropna()
-                if not cr_agg.empty:
-                    rating_colors = {
-                        'AAA': '#10b981', 'AA+': '#14b8a6', 'AA': '#06b6d4', 'AA-': '#0ea5e9',
-                        'A+': '#f59e0b', 'A': '#eab308', 'A-': '#d97706',
-                        'BBB+': '#f97316', 'BBB': '#ea580c', 'BBB-': '#dc2626',
-                    }
-                    colors = [rating_colors.get(r, '#888888') for r in cr_agg.index]
-                    fig_cr = go.Figure(data=[go.Pie(
-                        labels=cr_agg.index,
-                        values=cr_agg.values,
-                        hole=0.5,
-                        marker=dict(colors=colors, line=dict(color='#0F0F0F', width=2)),
-                        textinfo='label+percent',
-                        textfont=dict(size=12),
-                        hovertemplate='<b>%{label}</b><br>₹%{value:,.0f}<br>%{percent}<extra></extra>',
-                    )])
-                    fig_cr.update_layout(
-                        **CL,
-                        title=dict(text="Credit Quality Distribution", font=dict(size=14, color='#EAEAEA'), x=0, y=0.98),
-                        height=350,
-                        margin=dict(l=0, r=0, t=40, b=0),
-                        showlegend=False,
-                    )
-                    st.plotly_chart(fig_cr, use_container_width=True)
-
-            with col_sector:
-                sec_agg = sb.groupby('sector')['cost_basis'].sum().sort_values(ascending=True)
-                if not sec_agg.empty:
-                    fig_sec = go.Figure(data=[go.Bar(
-                        x=sec_agg.values,
-                        y=sec_agg.index,
-                        orientation='h',
-                        marker_color='#FFC300',
-                        text=[fmt_inr_short(v) for v in sec_agg.values],
-                        textposition='outside',
-                        textfont=dict(size=11, color='#EAEAEA'),
-                        hovertemplate='<b>%{y}</b><br>₹%{x:,.0f}<extra></extra>',
-                    )])
-                    fig_sec.update_layout(
-                        **CL,
-                        title=dict(text="Sector Allocation", font=dict(size=14, color='#EAEAEA'), x=0, y=0.98),
-                        height=350,
-                        margin=dict(l=0, r=20, t=40, b=0),
-                        xaxis=dict(showgrid=False, showticklabels=False),
-                        yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
-                    )
-                    st.plotly_chart(fig_sec, use_container_width=True)
-
-            # ── Row 3: Yield vs Duration Scatter ──
+            # ── Row 2: Yield vs Duration Scatter ──
             scatter_df = sb[sb['macaulay_duration'] > 0].copy()
             if not scatter_df.empty:
                 fig_scatter = go.Figure(data=[go.Scatter(
@@ -1451,41 +1397,69 @@ def page_record_transaction():
         return
 
     bid = opts[sel]
-    ttype = st.selectbox("Transaction Type", TRANSACTION_TYPES)
 
-    # For principal repayment, precompute units held per account
+    # Show selected security context (reactive to dropdown change)
+    sec_info = db_query(
+        "SELECT s.coupon_rate, s.face_value, s.frequency, s.maturity_date, "
+        "COALESCE(m.credit_rating, 'Unrated') as credit_rating "
+        "FROM securities s LEFT JOIN security_metadata m ON s.bond_id=m.bond_id "
+        "WHERE s.bond_id=?", (bid,),
+    )
+    if not sec_info.empty:
+        si = sec_info.iloc[0]
+        dtm = calc_days_to_maturity(si['maturity_date'])
+        mat_str = pd.to_datetime(si['maturity_date']).strftime('%d %b %Y')
+        st.markdown(
+            f"<div class='info-box'><p style='font-size:0.8rem;margin:0;color:var(--text-muted);line-height:1.8;'>"
+            f"Coupon: <strong>{fmt_pct(si['coupon_rate'])}</strong> · "
+            f"Face: <strong>{fmt_inr(si['face_value'])}</strong> · "
+            f"Freq: <strong>{si['frequency']}</strong> · "
+            f"Maturity: <strong>{mat_str}</strong> ({dtm}d) · "
+            f"Rating: {rating_badge(si['credit_rating'])}</p></div>",
+            unsafe_allow_html=True,
+        )
+
+    # Account and date outside the form so changes trigger immediate rerun
+    sel_c1, sel_c2, sel_c3 = st.columns(3)
+    with sel_c1:
+        ttype = st.selectbox("Transaction Type", TRANSACTION_TYPES)
+    with sel_c2:
+        account = st.selectbox("Account", ACCOUNTS, key="rec_acct")
+    with sel_c3:
+        tdate = st.date_input("Date", max_value=date.today(), key="rec_date")
+
+    # For principal repayment, show live units context (reactive to account change)
     units_by_account = pd.Series(dtype='float64')
     if ttype == 'Principal_Repayment':
         acct_txns = db_query("SELECT account, units FROM transactions WHERE bond_id=?", (bid,))
         if not acct_txns.empty:
             units_by_account = acct_txns.groupby('account')['units'].sum()
+        current_units = units_by_account.get(account, 0.0)
+        st.markdown(f"Applies to **{current_units:.0f}** units held in **{account}**")
 
     with st.form("rec_txn"):
-        c1, c2 = st.columns(2)
-        with c1:
-            account = st.selectbox("Account", ACCOUNTS)
-            tdate = st.date_input("Date", max_value=date.today())
-        with c2:
-            if ttype in ["Buy", "Sell"]:
+        if ttype in ["Buy", "Sell"]:
+            c1, c2 = st.columns(2)
+            with c1:
                 units = st.number_input("Units", min_value=1, step=1)
+            with c2:
                 price = st.number_input("Price", min_value=0.0, format="%.4f")
-                amount = units * price
-                st.markdown(f"**Amount: {fmt_inr(amount)}**")
-                adjust_fv = False
-            elif ttype == 'Principal_Repayment':
-                current_units = units_by_account.get(account, 0.0)
-                st.markdown(f"Applies to **{current_units}** units in **{account}**")
-                amount = st.number_input("Total Amount", min_value=0.0, format="%.2f")
-                if current_units > 0 and amount > 0:
-                    st.markdown(f"**Per Unit: {fmt_inr(amount / current_units)}**")
-                adjust_fv = st.checkbox("Adjust Face Value", value=True)
-                units = 0.0
-                price = 0.0
-            else:
-                amount = st.number_input("Amount", min_value=0.0, format="%.2f")
-                units = 0.0
-                price = 0.0
-                adjust_fv = False
+            amount = units * price
+            st.markdown(f"**Amount: {fmt_inr(amount)}**")
+            adjust_fv = False
+        elif ttype == 'Principal_Repayment':
+            current_units = units_by_account.get(account, 0.0)
+            amount = st.number_input("Total Amount", min_value=0.0, format="%.2f")
+            if current_units > 0 and amount > 0:
+                st.markdown(f"**Per Unit: {fmt_inr(amount / current_units)}**")
+            adjust_fv = st.checkbox("Adjust Face Value", value=True)
+            units = 0.0
+            price = 0.0
+        else:
+            amount = st.number_input("Amount", min_value=0.0, format="%.2f")
+            units = 0.0
+            price = 0.0
+            adjust_fv = False
 
         notes = st.text_area("Notes")
 
