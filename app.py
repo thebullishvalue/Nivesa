@@ -872,6 +872,8 @@ def page_dashboard():
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         sb = df[df['cost_basis'] > 0].copy()
 
+        total_cost = totals['Total Cost Basis']
+
         if sb.empty:
             st.info("No positions with positive cost basis to display.")
         else:
@@ -1063,7 +1065,7 @@ def page_dashboard():
             legend=dict(orientation='h', yanchor='top', y=-0.1, xanchor='left', x=0, font=dict(size=10), bgcolor='rgba(0,0,0,0)'),
             margin=dict(l=40, r=20, t=65, b=55),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         rows = ""
         for bucket in MATURITY_BUCKET_ORDER:
@@ -1136,7 +1138,7 @@ def page_dashboard():
                 legend=dict(orientation='h', yanchor='top', y=-0.18, xanchor='left', x=0, font=dict(size=10), bgcolor='rgba(0,0,0,0)'),
                 margin=dict(l=40, r=20, t=65, b=70),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             total_cpn = cdf['coupon'].sum()
             total_prin = cdf['principal'].sum()
