@@ -444,7 +444,7 @@ load_css()
 def db_init():
     """Initialize / migrate database to current schema."""
     try:
-        with sqlite3.connect(DB_FILE) as conn:
+        with _connect() as conn:
             c = conn.cursor()
             c.execute("PRAGMA journal_mode=WAL")
 
@@ -503,10 +503,17 @@ def db_init():
         st.stop()
 
 
+def _connect():
+    """Create a connection with WAL mode and foreign key enforcement."""
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
 def db_query(query, params=()):
     """Run SELECT; return DataFrame."""
     try:
-        with sqlite3.connect(DB_FILE) as conn:
+        with _connect() as conn:
             return pd.read_sql_query(query, conn, params=params)
     except sqlite3.Error as e:
         st.error(f"Query failed: {e}")
@@ -517,7 +524,7 @@ def db_query(query, params=()):
 def db_execute(query, params=()):
     """Run INSERT/UPDATE/DELETE; return success bool."""
     try:
-        with sqlite3.connect(DB_FILE) as conn:
+        with _connect() as conn:
             conn.cursor().execute(query, params)
             conn.commit()
             return True
@@ -877,6 +884,9 @@ def page_dashboard():
         if sb.empty:
             st.info("No positions with positive cost basis to display.")
         else:
+            # Use positive-cost-basis total for accurate weight calculation
+            total_cost_alloc = sb['cost_basis'].sum()
+
             # ── Account Capital Allocation Table ──
             st.markdown("#### Capital Allocation by Account")
             acct_agg = sb.groupby('account').agg(
@@ -888,7 +898,7 @@ def page_dashboard():
                 Issuers=('issuer', 'nunique'),
                 Inc=('annual_coupon_income', 'sum'),
             ).reset_index()
-            acct_agg['Wt'] = acct_agg['Cost'] / total_cost if total_cost > 0 else 0
+            acct_agg['Wt'] = acct_agg['Cost'] / total_cost_alloc if total_cost_alloc > 0 else 0
             acct_agg['NY'] = acct_agg.apply(lambda r: r['NY'] / r['Cost'] if r['Cost'] > 0 else 0, axis=1)
             acct_agg['YC'] = acct_agg.apply(lambda r: r['YC'] / r['Cost'] if r['Cost'] > 0 else 0, axis=1)
             acct_agg = acct_agg.sort_values('Cost', ascending=False)
@@ -1033,7 +1043,7 @@ def page_dashboard():
             ['All'] + sorted(df['account'].unique().tolist()),
             key="mat_acct",
         )
-        mat_df = df if mat_filter == 'All' else df[df['account'] == mat_filter]
+        mat_df = df.copy() if mat_filter == 'All' else df[df['account'] == mat_filter].copy()
 
         mat_df['mb'] = mat_df['days_to_maturity'].apply(_maturity_bucket)
         bucket_agg = (
@@ -1264,6 +1274,8 @@ def page_add_security():
         if submitted:
             if not issuer or not isin:
                 st.error("Issuer and ISIN are required.")
+            elif mat <= date.today():
+                st.error("Maturity date must be in the future.")
             elif not db_query("SELECT 1 FROM securities WHERE isin=?", (isin,)).empty:
                 st.error(f"ISIN **{isin}** already exists in the securities master.")
             else:
@@ -1447,12 +1459,17 @@ def page_record_transaction():
 
     # For principal repayment, show live units context (reactive to account change)
     units_by_account = pd.Series(dtype='float64')
+    total_units_all = 0.0
     if ttype == 'Principal_Repayment':
         acct_txns = db_query("SELECT account, units FROM transactions WHERE bond_id=?", (bid,))
         if not acct_txns.empty:
             units_by_account = acct_txns.groupby('account')['units'].sum()
+            total_units_all = acct_txns['units'].sum()
         current_units = units_by_account.get(account, 0.0)
-        st.markdown(f"Applies to **{current_units:.0f}** units held in **{account}**")
+        st.markdown(
+            f"**{account}**: {current_units:.0f} units · "
+            f"**All accounts**: {total_units_all:.0f} units total"
+        )
 
     with st.form("rec_txn"):
         if ttype in ["Buy", "Sell"]:
@@ -1468,8 +1485,11 @@ def page_record_transaction():
             current_units = units_by_account.get(account, 0.0)
             amount = st.number_input("Total Amount", min_value=0.0, format="%.2f")
             if current_units > 0 and amount > 0:
-                st.markdown(f"**Per Unit: {fmt_inr(amount / current_units)}**")
+                st.markdown(f"**Per Unit (this account): {fmt_inr(amount / current_units)}**")
             adjust_fv = st.checkbox("Adjust Face Value", value=True)
+            if adjust_fv and total_units_all > 0 and amount > 0:
+                fv_adj = amount / total_units_all
+                st.markdown(f"Face value will be reduced by **{fmt_inr(fv_adj)}**/unit globally")
             units = 0.0
             price = 0.0
         else:
@@ -1869,10 +1889,9 @@ def main():
     )
 
     # ── Route ──
-    for key, handler in PAGE_ROUTES.items():
-        if key in page:
-            handler()
-            break
+    handler = PAGE_ROUTES.get(page)
+    if handler:
+        handler()
 
 
 if __name__ == "__main__":
