@@ -29,8 +29,8 @@ import os
 # APPLICATION CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
-VERSION = "2.1.0"
-BUILD = "2026.03.AUDIT_REFACTOR"
+VERSION = "2.2.0"
+BUILD = "2026.03.SESSION_STATE"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
 COMPANY = "Hemrek Capital"
@@ -875,96 +875,66 @@ def page_dashboard():
         if sb.empty:
             st.info("No positions with positive cost basis to display.")
         else:
-            # ── Row 1: Portfolio Hierarchy Treemap ──
-            unique_accounts = sorted(sb['account'].unique())
-            acct_colors = {acc: CC[i % len(CC)] for i, acc in enumerate(unique_accounts)}
+            # ── Account Capital Allocation Table ──
+            st.markdown("#### Capital Allocation by Account")
+            acct_agg = sb.groupby('account').agg(
+                Cost=('cost_basis', 'sum'),
+                Face=('position_face_value', 'sum'),
+                NY=('ny_c', 'sum'),
+                YC=('ytc_c', 'sum'),
+                Pos=('bond_id', 'count'),
+                Issuers=('issuer', 'nunique'),
+                Inc=('annual_coupon_income', 'sum'),
+            ).reset_index()
+            acct_agg['Wt'] = acct_agg['Cost'] / total_cost if total_cost > 0 else 0
+            acct_agg['NY'] = acct_agg.apply(lambda r: r['NY'] / r['Cost'] if r['Cost'] > 0 else 0, axis=1)
+            acct_agg['YC'] = acct_agg.apply(lambda r: r['YC'] / r['Cost'] if r['Cost'] > 0 else 0, axis=1)
+            acct_agg = acct_agg.sort_values('Cost', ascending=False)
 
-            fig_tree = px.treemap(
-                sb,
-                path=[px.Constant("Portfolio"), 'account', 'issuer'],
-                values='cost_basis',
-                color='account',
-                color_discrete_map=acct_colors,
-                color_discrete_sequence=CC,
-            )
-            fig_tree.update_traces(
-                root_color="#1A1A1A",
-                textinfo="label+value+percent entry",
-                textfont=dict(family='Inter', size=14),
-                marker=dict(
-                    line=dict(color='#0F0F0F', width=2),
-                    pad=dict(t=5, l=5, r=5, b=5),
-                ),
-                hovertemplate=(
-                    '<b>%{label}</b><br>Amount: ₹%{value:,.0f}<br>'
-                    'Share: %{percentRoot:.1%}<extra></extra>'
-                ),
-            )
-            fig_tree.update_layout(
-                **CL,
-                title=dict(
-                    text="Capital Allocation (Account → Issuer)",
-                    font=dict(size=15, color='#EAEAEA'), x=0, y=0.98,
-                ),
-                height=420,
-                margin=dict(l=0, r=0, t=40, b=0),
-                uniformtext=dict(minsize=10, mode='hide'),
-            )
-            st.plotly_chart(fig_tree, use_container_width=True)
-
-            # ── Row 2: Yield vs Duration Scatter ──
-            scatter_df = sb[sb['macaulay_duration'] > 0].copy()
-            if not scatter_df.empty:
-                fig_scatter = go.Figure(data=[go.Scatter(
-                    x=scatter_df['macaulay_duration'],
-                    y=scatter_df['yield_to_cost'].apply(lambda v: v * 100),
-                    mode='markers+text',
-                    marker=dict(
-                        size=scatter_df['cost_basis'] / scatter_df['cost_basis'].max() * 40 + 8,
-                        color=[acct_colors.get(a, '#888') for a in scatter_df['account']],
-                        line=dict(color='#0F0F0F', width=1),
-                        opacity=0.85,
-                    ),
-                    text=scatter_df['issuer'].apply(lambda s: s[:12]),
-                    textposition='top center',
-                    textfont=dict(size=9, color='#EAEAEA'),
-                    hovertemplate=(
-                        '<b>%{text}</b><br>Duration: %{x:.2f}y<br>'
-                        'YTC: %{y:.2f}%<br><extra></extra>'
-                    ),
-                )])
-                fig_scatter.update_layout(
-                    **CL,
-                    title=dict(
-                        text="Yield vs Duration (bubble = capital weight)",
-                        font=dict(size=14, color='#EAEAEA'), x=0, y=0.98,
-                    ),
-                    height=380,
-                    margin=dict(l=50, r=20, t=45, b=50),
-                    xaxis=dict(
-                        title='Macaulay Duration (years)',
-                        gridcolor='rgba(255,255,255,0.05)',
-                    ),
-                    yaxis=dict(
-                        title='Yield to Cost (%)',
-                        gridcolor='rgba(255,255,255,0.05)',
-                    ),
+            max_acct_wt = acct_agg['Wt'].max() if not acct_agg.empty and acct_agg['Wt'].max() > 0 else 1.0
+            acct_rows = ""
+            for _, r in acct_agg.iterrows():
+                bar_pct = (r['Wt'] / max_acct_wt) * 100
+                acct_rows += (
+                    f"<tr><td style='font-weight:600'>{r['account']}</td>"
+                    f"<td>{fmt_inr(r['Cost'])}</td><td>{fmt_inr(r['Face'])}</td>"
+                    f"<td><div style='display:flex;align-items:center;gap:8px'>"
+                    f"<div style='width:60px;height:6px;background:#2A2A2A;border-radius:3px;overflow:hidden'>"
+                    f"<div style='width:{bar_pct:.0f}%;height:100%;background:#FFC300;border-radius:3px'></div></div>"
+                    f"<span>{r['Wt']:.1%}</span></div></td>"
+                    f"<td style='text-align:center'>{int(r['Pos'])}</td>"
+                    f"<td style='text-align:center'>{int(r['Issuers'])}</td>"
+                    f"<td>{fmt_pct(r['NY'])}</td><td>{fmt_pct(r['YC'])}</td>"
+                    f"<td style='text-align:right'>{fmt_inr(r['Inc'])}</td></tr>"
                 )
-                st.plotly_chart(fig_scatter, use_container_width=True)
+            st.markdown(
+                _render_html_table(
+                    ["Account", "Cost Basis", "Face Value", "Weight", "Pos", "Issuers", "Nominal", "YTC", "Annual Inc"],
+                    acct_rows,
+                ),
+                unsafe_allow_html=True,
+            )
 
-        # ── Concentration Risk Table (retained) ──
+        # ── Concentration Risk Table ──
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         st.markdown("#### Concentration Risk")
 
-        total_cost = totals['Total Cost Basis']
-        ir = df.groupby('issuer').agg(
+        conc_filter = st.selectbox(
+            "Filter by Account",
+            ['All'] + sorted(df['account'].unique().tolist()),
+            key="conc_acct",
+        )
+        conc_df = df if conc_filter == 'All' else df[df['account'] == conc_filter]
+        total_cost_conc = conc_df['cost_basis'].sum()
+
+        ir = conc_df.groupby('issuer').agg(
             Cost=('cost_basis', 'sum'),
             Face=('position_face_value', 'sum'),
             NY=('ny_c', 'sum'),
             YC=('ytc_c', 'sum'),
             Pos=('bond_id', 'count'),
         ).reset_index()
-        ir['Wt'] = ir['Cost'] / total_cost if total_cost > 0 else 0
+        ir['Wt'] = ir['Cost'] / total_cost_conc if total_cost_conc > 0 else 0
         ir['NY'] = ir.apply(lambda r: r['NY'] / r['Cost'] if r['Cost'] > 0 else 0, axis=1)
         ir['YC'] = ir.apply(lambda r: r['YC'] / r['Cost'] if r['Cost'] > 0 else 0, axis=1)
         ir = ir.sort_values('Cost', ascending=False)
@@ -1056,9 +1026,16 @@ def page_dashboard():
     with tab_mat:
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
-        df['mb'] = df['days_to_maturity'].apply(_maturity_bucket)
+        mat_filter = st.selectbox(
+            "Filter by Account",
+            ['All'] + sorted(df['account'].unique().tolist()),
+            key="mat_acct",
+        )
+        mat_df = df if mat_filter == 'All' else df[df['account'] == mat_filter]
+
+        mat_df['mb'] = mat_df['days_to_maturity'].apply(_maturity_bucket)
         bucket_agg = (
-            df.groupby('mb')
+            mat_df.groupby('mb')
             .agg(Cost=('cost_basis', 'sum'), Face=('position_face_value', 'sum'), N=('bond_id', 'count'))
             .reindex(MATURITY_BUCKET_ORDER)
             .fillna(0)
@@ -1090,7 +1067,7 @@ def page_dashboard():
 
         rows = ""
         for bucket in MATURITY_BUCKET_ORDER:
-            for _, p in df[df['mb'] == bucket].sort_values('days_to_maturity').iterrows():
+            for _, p in mat_df[mat_df['mb'] == bucket].sort_values('days_to_maturity').iterrows():
                 mat_str = pd.to_datetime(p['maturity_date']).strftime('%d %b %Y')
                 rows += (
                     f"<tr><td>{bucket}</td>"
@@ -1116,8 +1093,15 @@ def page_dashboard():
     with tab_cf:
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
+        cf_filter = st.selectbox(
+            "Filter by Account",
+            ['All'] + sorted(df['account'].unique().tolist()),
+            key="cf_acct",
+        )
+        cf_df = df if cf_filter == 'All' else df[df['account'] == cf_filter]
+
         all_cf = []
-        for _, p in df.iterrows():
+        for _, p in cf_df.iterrows():
             fvpu = p['position_face_value'] / p['current_units'] if p['current_units'] > 0 else 0
             schedule = generate_cashflow_schedule(
                 fvpu, p['coupon_rate'], p['frequency'], p['maturity_date'], p['current_units'],
@@ -1190,7 +1174,14 @@ def page_dashboard():
     with tab_issuer:
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
-        idd = df.groupby(['issuer', 'isin']).agg(
+        iss_filter = st.selectbox(
+            "Filter by Account",
+            ['All'] + sorted(df['account'].unique().tolist()),
+            key="iss_acct",
+        )
+        iss_df = df if iss_filter == 'All' else df[df['account'] == iss_filter]
+
+        idd = iss_df.groupby(['issuer', 'isin']).agg(
             Cost=('cost_basis', 'sum'),
             Face=('position_face_value', 'sum'),
             NY=('ny_c', 'sum'),
@@ -1198,8 +1189,8 @@ def page_dashboard():
             Units=('current_units', 'sum'),
             Inc=('annual_coupon_income', 'sum'),
         )
-        total_cost = totals['Total Cost Basis']
-        idd['Wt'] = idd['Cost'] / total_cost if total_cost > 0 else 0
+        total_cost_iss = iss_df['cost_basis'].sum()
+        idd['Wt'] = idd['Cost'] / total_cost_iss if total_cost_iss > 0 else 0
         idd['NY'] = idd.apply(lambda r: r['NY'] / r['Cost'] if r['Cost'] > 0 else 0, axis=1)
         idd['YC'] = idd.apply(lambda r: r['YC'] / r['Cost'] if r['Cost'] > 0 else 0, axis=1)
         idd = idd.sort_values('Cost', ascending=False)
@@ -1322,6 +1313,28 @@ def page_edit_security():
     meta = meta_df.iloc[0] if not meta_df.empty else None
 
     txn_count = db_query("SELECT COUNT(*) as c FROM transactions WHERE bond_id=?", (bid,))['c'].iloc[0]
+
+    # Reactive holdings context panel
+    holdings = db_query(
+        "SELECT account, SUM(units) as units, SUM(amount) as cost "
+        "FROM transactions WHERE bond_id=? GROUP BY account HAVING SUM(units) > 0",
+        (bid,),
+    )
+    dtm = calc_days_to_maturity(sec['maturity_date'])
+    mat_str = pd.to_datetime(sec['maturity_date']).strftime('%d %b %Y')
+    holders = " · ".join(
+        f"{r['account']}: {int(r['units'])} units ({fmt_inr(r['cost'])})"
+        for _, r in holdings.iterrows()
+    ) if not holdings.empty else "No holdings"
+    st.markdown(
+        f"<div class='info-box'><p style='font-size:0.8rem;margin:0;color:var(--text-muted);line-height:1.8;'>"
+        f"Coupon: <strong>{fmt_pct(sec['coupon_rate'])}</strong> · "
+        f"Face: <strong>{fmt_inr(sec['face_value'])}</strong> · "
+        f"Maturity: <strong>{mat_str}</strong> ({dtm}d) · "
+        f"Transactions: <strong>{txn_count}</strong><br>"
+        f"Holdings: {holders}</p></div>",
+        unsafe_allow_html=True,
+    )
 
     listing_opts = ["Unlisted", "NSE", "BSE", "Both"]
 
@@ -1515,6 +1528,28 @@ def page_edit_transaction():
 
     tid = opts[sel]
     txn = txns[txns['transaction_id'] == tid].iloc[0]
+
+    # Reactive security context panel
+    sec_ctx = db_query(
+        "SELECT s.coupon_rate, s.face_value, s.frequency, s.maturity_date, "
+        "COALESCE(m.credit_rating, 'Unrated') as credit_rating "
+        "FROM securities s LEFT JOIN security_metadata m ON s.bond_id=m.bond_id "
+        "WHERE s.bond_id=?", (txn['bond_id'],),
+    )
+    if not sec_ctx.empty:
+        sc = sec_ctx.iloc[0]
+        dtm = calc_days_to_maturity(sc['maturity_date'])
+        mat_str = pd.to_datetime(sc['maturity_date']).strftime('%d %b %Y')
+        st.markdown(
+            f"<div class='info-box'><p style='font-size:0.8rem;margin:0;color:var(--text-muted);line-height:1.8;'>"
+            f"Coupon: <strong>{fmt_pct(sc['coupon_rate'])}</strong> · "
+            f"Face: <strong>{fmt_inr(sc['face_value'])}</strong> · "
+            f"Freq: <strong>{sc['frequency']}</strong> · "
+            f"Maturity: <strong>{mat_str}</strong> ({dtm}d) · "
+            f"Rating: {rating_badge(sc['credit_rating'])}</p></div>",
+            unsafe_allow_html=True,
+        )
+
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
     with st.form("edit_txn"):
@@ -1651,8 +1686,27 @@ def page_securities_master():
         st.info("No securities registered.")
         return
 
+    # Reactive filters
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        type_opts = ['All'] + sorted(secs['bond_type'].dropna().unique().tolist())
+        sm_type = st.selectbox("Bond Type", type_opts, key="sm_type")
+    with f2:
+        rating_opts = ['All'] + sorted(secs['credit_rating'].dropna().unique().tolist())
+        sm_rating = st.selectbox("Credit Rating", rating_opts, key="sm_rating")
+    with f3:
+        sm_search = st.text_input("Search Issuer", key="sm_search")
+
+    filtered_secs = secs.copy()
+    if sm_type != 'All':
+        filtered_secs = filtered_secs[filtered_secs['bond_type'] == sm_type]
+    if sm_rating != 'All':
+        filtered_secs = filtered_secs[filtered_secs['credit_rating'] == sm_rating]
+    if sm_search:
+        filtered_secs = filtered_secs[filtered_secs['issuer'].str.contains(sm_search, case=False, na=False)]
+
     rows = ""
-    for _, s in secs.iterrows():
+    for _, s in filtered_secs.iterrows():
         dtm = calc_days_to_maturity(s['maturity_date'])
         mat_str = pd.to_datetime(s['maturity_date']).strftime('%d %b %Y')
         rating = s.get('credit_rating', 'Unrated') or 'Unrated'
