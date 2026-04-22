@@ -24,6 +24,7 @@ import sqlite3
 import uuid
 import logging
 import os
+import io
 
 # ═══════════════════════════════════════════════════════════════════════
 # APPLICATION CONSTANTS
@@ -774,6 +775,29 @@ def get_positions_dataframe():
     return df, totals
 
 
+def get_transaction_ledger_dataframe():
+    """Fetch all transactions joined with security master data."""
+    query = """
+    SELECT
+        t.trade_date,
+        s.issuer,
+        s.isin,
+        t.account,
+        t.transaction_type,
+        t.units,
+        t.price,
+        t.amount,
+        t.notes
+    FROM transactions t
+    JOIN securities s ON t.bond_id = s.bond_id
+    ORDER BY t.trade_date DESC
+    """
+    df = db_query(query)
+    if not df.empty:
+        df['trade_date'] = pd.to_datetime(df['trade_date'])
+    return df
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # CHART CONFIG
 # ═══════════════════════════════════════════════════════════════════════
@@ -867,9 +891,9 @@ def page_dashboard():
                    f"{totals['Num Issuers']} issuers · {totals['Num Accounts']} accounts")
 
     # ── Tabs ──
-    tab_alloc, tab_pos, tab_mat, tab_cf, tab_issuer = st.tabs([
+    tab_alloc, tab_pos, tab_mat, tab_cf, tab_issuer, tab_ledger = st.tabs([
         "Allocation & Risk", "Positions", "Maturity Ladder",
-        "Cashflow Schedule", "Issuer Detail",
+        "Cashflow Schedule", "Issuer Detail", "Transaction Ledger",
     ])
 
     # ─────────────────────────────────────────────────────────────────────
@@ -1028,8 +1052,18 @@ def page_dashboard():
             'macaulay_duration', 'modified_duration', 'maturity_date',
             'annual_coupon_income', 'interest_received', 'days_to_maturity',
         ]
+        col_map = {
+            'issuer': 'Issuer', 'isin': 'ISIN', 'account': 'Account',
+            'credit_rating': 'Rating', 'current_units': 'Units',
+            'cost_basis': 'Cost Basis', 'position_face_value': 'Face Value',
+            'nominal_yield': 'Nominal Yield', 'yield_to_cost': 'YTC (%)',
+            'macaulay_duration': 'Mac Duration', 'modified_duration': 'Mod Duration',
+            'maturity_date': 'Maturity Date', 'annual_coupon_income': 'Annual Income',
+            'interest_received': 'Interest Received', 'days_to_maturity': 'Days Left'
+        }
         exp = filtered[export_cols].copy()
         exp['maturity_date'] = pd.to_datetime(exp['maturity_date']).dt.strftime('%Y-%m-%d')
+        exp = exp.rename(columns=col_map)
         st.download_button("EXPORT CSV", exp.to_csv(index=False), "nivesa_positions.csv", "text/csv")
 
     # ─────────────────────────────────────────────────────────────────────
@@ -1227,6 +1261,77 @@ def page_dashboard():
             ),
             unsafe_allow_html=True,
         )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # TAB 6: Transaction Ledger
+    # ─────────────────────────────────────────────────────────────────────
+    with tab_ledger:
+        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+
+        led_filter = st.selectbox(
+            "Filter by Account",
+            ['All'] + sorted(df['account'].unique().tolist()),
+            key="led_acct",
+        )
+
+        ltdf = get_transaction_ledger_dataframe()
+        filt_ledger = ltdf if led_filter == 'All' else ltdf[ltdf['account'] == led_filter]
+
+        if filt_ledger.empty:
+            st.info("No transactions found.")
+        else:
+            # Table visualization
+            rows_ledger = ""
+            for _, t in filt_ledger.iterrows():
+                date_str = t['trade_date'].strftime('%d %b %Y')
+                typ_cls = "badge-aaa" if t['transaction_type'] == 'Buy' else \
+                          "badge-below" if t['transaction_type'] == 'Sell' else \
+                          "badge-aa" if t['transaction_type'] == 'Interest_Receipt' else \
+                          "badge-a"
+                typ_badge = f'<span class="badge {typ_cls}">{t["transaction_type"]}</span>'
+
+                rows_ledger += (
+                    f"<tr><td>{date_str}</td>"
+                    f"<td><div style='font-weight:600'>{t['issuer']}</div>"
+                    f"<div style='font-size:0.75rem;color:#888'>{t['isin']}</div></td>"
+                    f"<td>{t['account']}</td>"
+                    f"<td>{typ_badge}</td>"
+                    f"<td style='text-align:right'>{int(t['units']) if t['units'] % 1 == 0 else t['units']}</td>"
+                    f"<td style='text-align:right'>{fmt_inr(t['price'])}</td>"
+                    f"<td style='text-align:right;font-weight:600'>{fmt_inr(t['amount'])}</td>"
+                    f"<td>{t['notes'] or '-'}</td></tr>"
+                )
+
+            st.markdown(
+                _render_html_table(
+                    ["Date", "Security", "Acct", "Type", "Units", "Principal Amount", "Total Amount", "Notes"],
+                    rows_ledger,
+                ),
+                unsafe_allow_html=True,
+            )
+
+            # Excel Export
+            buffer = io.BytesIO()
+            export_df = filt_ledger.copy()
+            if not export_df.empty:
+                export_df['trade_date'] = pd.to_datetime(export_df['trade_date']).dt.date
+
+            col_map_ledger = {
+                'trade_date': 'Date', 'issuer': 'Security', 'isin': 'ISIN',
+                'account': 'Account', 'transaction_type': 'Type',
+                'units': 'Units', 'price': 'Principal Amount', 'amount': 'Total Amount', 'notes': 'Notes'
+            }
+            export_df = export_df.rename(columns=col_map_ledger)
+
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                export_df.to_excel(writer, index=False, sheet_name='Transaction Ledger')
+
+            st.download_button(
+                label="DOWNLOAD EXCEL",
+                data=buffer.getvalue(),
+                file_name=f"nivesa_ledger_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════
