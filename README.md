@@ -9,7 +9,9 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![License](https://img.shields.io/badge/License-Proprietary-FFC300)](#license)
-[![Version](https://img.shields.io/badge/Version-2.0.0-FFC300)](#)
+[![Version](https://img.shields.io/badge/Version-2.4.0-FFC300)](#)
+[CHANGELOG](CHANGELOG.md) &nbsp;|&nbsp; Last Updated: 2026-07
+
 
 *A Hemrek Capital Product*
 
