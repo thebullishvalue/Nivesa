@@ -58,7 +58,7 @@ TRANSACTION_TYPES = ["Buy", "Sell", "Interest_Receipt", "Principal_Repayment"]
 st.set_page_config(
     page_title=f"{PRODUCT_NAME} | Bond Portfolio Ledger",
     layout="wide",
-    page_icon="📊",
+    page_icon="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0Q0QTg1MyIgc3Ryb2tlLXdpZHRoPSIyIi8+PHBhdGggZD0iTTggMTRsMy01IDIgMyAzLTQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0Q0QTg1MyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=",
     initial_sidebar_state="collapsed"
 )
 
@@ -85,263 +85,18 @@ logger = logging.getLogger(PRODUCT_NAME)
 # ═══════════════════════════════════════════════════════════════════════
 
 def load_css():
-    st.markdown("""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
-        :root {
-            --primary-color: #FFC300;
-            --primary-rgb: 255, 195, 0;
-            --background-color: #0c0c0e;
-            --secondary-background-color: #141417;
-            --bg-card: rgba(26, 26, 31, 0.6);
-            --bg-elevated: #212126;
-            --text-primary: #F3F4F6;
-            --text-secondary: #D1D5DB;
-            --text-muted: #9CA3AF;
-            --border-color: rgba(255, 255, 255, 0.08);
-            --border-light: rgba(255, 255, 255, 0.15);
-
-            --success-green: #10b981;
-            --danger-red: #ef4444;
-            --warning-amber: #f59e0b;
-            --info-cyan: #3b82f6;
-            --neutral: #9CA3AF;
-        }
-
-        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
-
-        .main, [data-testid="stSidebar"] {
-            background-color: var(--background-color);
-            color: var(--text-primary);
-        }
-
-        .stApp > header { background-color: transparent; }
-        #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-
-        .block-container {
-            padding-top: 3rem;
-            max-width: 95%;
-            padding-left: 3rem;
-            padding-right: 3rem;
-        }
-
-        /* ── Sidebar ── */
-        [data-testid="stSidebar"] {
-            background: var(--secondary-background-color);
-            border-right: 1px solid var(--border-color);
-        }
-        
-        [data-testid="stSidebarNav"] span {
-            font-weight: 500;
-            font-size: 0.95rem;
-        }
-
-        /* ── Premium Header ── */
-        .premium-header {
-            background: var(--bg-card);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            padding: 1.5rem 2rem;
-            border-radius: 16px;
-            margin-bottom: 2rem;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-            position: relative;
-            overflow: hidden;
-            margin-top: 0.5rem;
-        }
-        .premium-header::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: radial-gradient(circle at top right, rgba(var(--primary-rgb),0.1) 0%, transparent 50%);
-            pointer-events: none;
-        }
-        .premium-header h1 {
-            margin: 0;
-            font-size: 2.2rem;
-            font-weight: 800;
-            color: var(--text-primary);
-            letter-spacing: -0.5px;
-            background: linear-gradient(to right, #ffffff, #a3a3a3);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .premium-header .tagline {
-            color: var(--text-muted);
-            font-size: 0.95rem;
-            margin-top: 0.4rem;
-            font-weight: 400;
-        }
-
-        /* ── Metric Cards (Glassmorphism) ── */
-        .metric-card {
-            background: var(--bg-card);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            padding: 1.25rem 1.5rem;
-            border-radius: 14px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.2);
-            margin-bottom: 0.5rem;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            height: 100%;
-        }
-        .metric-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 32px rgba(var(--primary-rgb), 0.15);
-            border-color: rgba(var(--primary-rgb), 0.3);
-        }
-        .metric-card h4 {
-            color: var(--text-muted);
-            font-size: 0.8rem;
-            margin-bottom: 0.6rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-        }
-        .metric-card h2 {
-            color: var(--text-primary);
-            font-size: 1.85rem;
-            font-weight: 700;
-            margin: 0;
-            line-height: 1;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
-        }
-        .metric-card .sub-metric {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-top: 0.6rem;
-            font-weight: 500;
-        }
-        .metric-card.success h2 { color: var(--success-green); text-shadow: 0 0 15px rgba(16,185,129,0.3); }
-        .metric-card.danger h2  { color: var(--danger-red); text-shadow: 0 0 15px rgba(239,68,68,0.3); }
-        .metric-card.warning h2 { color: var(--warning-amber); text-shadow: 0 0 15px rgba(245,158,11,0.3); }
-        .metric-card.info h2    { color: var(--info-cyan); text-shadow: 0 0 15px rgba(59,130,246,0.3); }
-        .metric-card.primary h2 { color: var(--primary-color); text-shadow: 0 0 15px rgba(255,195,0,0.3); }
-
-        /* ── Tabs ── */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 2rem;
-            background: transparent;
-            padding: 0;
-            margin-top: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .stTabs [data-baseweb="tab"] {
-            color: var(--text-muted);
-            border-bottom: 2px solid transparent;
-            transition: color 0.3s, border-bottom 0.3s;
-            background: transparent;
-            font-weight: 600;
-            padding-bottom: 0.75rem;
-            font-size: 1rem;
-        }
-        .stTabs [aria-selected="true"] {
-            color: var(--primary-color) !important;
-            border-bottom: 2px solid var(--primary-color);
-            background: transparent !important;
-        }
-
-        /* ── Sections ── */
-        .section-header {
-            margin-bottom: 1.25rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .section-title {
-            font-size: 1.4rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin: 0;
-            letter-spacing: -0.3px;
-        }
-        .section-subtitle {
-            font-size: 0.9rem;
-            color: var(--text-muted);
-            margin: 0.25rem 0 0 0;
-        }
-        .section-divider {
-            height: 1px;
-            background: linear-gradient(90deg, transparent 0%, var(--border-color) 50%, transparent 100%);
-            margin: 2rem 0;
-        }
-
-        /* ── Alerts & Info Boxes ── */
-        .info-box {
-            background: var(--bg-card);
-            backdrop-filter: blur(8px);
-            border: 1px solid var(--border-color);
-            border-left: 4px solid var(--primary-color);
-            padding: 1.25rem 1.5rem;
-            border-radius: 8px;
-            margin: 0.5rem 0 1.5rem 0;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
-        .info-box.alert-warning { border-left-color: var(--warning-amber); }
-        .info-box.alert-danger { border-left-color: var(--danger-red); }
-        .info-box h4 { color: var(--text-primary); margin: 0 0 0.5rem 0; font-size: 1.05rem; font-weight: 700; }
-        .info-box p  { color: var(--text-muted); margin: 0; font-size: 0.95rem; line-height: 1.5; }
-        
-        .alert-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .alert-item:last-child { border-bottom: none; }
-        .alert-icon { font-size: 1.2rem; }
-
-        /* ── Buttons ── */
-        .stButton>button, .stFormSubmitButton>button {
-            border: 1px solid var(--border-light) !important;
-            background: var(--bg-elevated) !important;
-            color: var(--text-primary) !important;
-            font-weight: 600 !important;
-            border-radius: 8px !important;
-            padding: 0.5rem 1.5rem !important;
-            transition: all 0.2s ease !important;
-        }
-        .stButton>button:hover, .stFormSubmitButton>button:hover {
-            border-color: var(--primary-color) !important;
-            box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.2) !important;
-            transform: translateY(-1px) !important;
-        }
-        .stButton>button:active, .stFormSubmitButton>button:active {
-            transform: translateY(0) !important;
-        }
-        
-        .primary-action-btn>button {
-            background: var(--primary-color) !important;
-            color: #000 !important;
-            border: none !important;
-        }
-        .primary-action-btn>button:hover {
-            background: #ffcc33 !important;
-            box-shadow: 0 0 20px rgba(var(--primary-rgb), 0.4) !important;
-        }
-
-        /* ── Dataframes ── */
-        [data-testid="stDataFrame"] {
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-        }
-        
-        /* ── Expanders ── */
-        .streamlit-expanderHeader {
-            background: var(--bg-card);
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            font-weight: 600;
-        }
-
-    </style>
-    """, unsafe_allow_html=True)
-
+    """Load the Obsidian Quant Terminal CSS into the Streamlit app."""
+    css_path = os.path.join(os.path.dirname(__file__), "theme.css")
+    if os.path.exists(css_path):
+        with open(css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+    else:
+        css = "/* theme.css not found */"
+    try:
+        _stamp = int(os.path.getmtime(css_path))
+    except Exception:
+        _stamp = 0
+    st.markdown(f"<style data-css-v='{_stamp}'>\n/* v{_stamp} */\n{css}</style>", unsafe_allow_html=True)
 load_css()
 
 
@@ -447,6 +202,46 @@ def db_execute(query, params=()):
 def ensure_metadata(bond_id):
     """Guarantee a metadata row exists for a security."""
     db_execute("INSERT OR IGNORE INTO security_metadata (bond_id) VALUES (?)", (bond_id,))
+
+
+def set_notification(message, type="success"):
+    """Store notification in session state to persist across rerun."""
+    if "notifications" not in st.session_state:
+        st.session_state["notifications"] = []
+    st.session_state["notifications"].append({"message": message, "type": type})
+
+
+def show_notifications():
+    """Render and clear stored notifications."""
+    if "notifications" in st.session_state and st.session_state["notifications"]:
+        for n in st.session_state["notifications"]:
+            if n["type"] == "success":
+                st.toast(n["message"])
+            elif n["type"] == "error":
+                st.error(n["message"])
+            elif n["type"] == "warning":
+                st.warning(n["message"])
+        st.session_state["notifications"] = []
+
+
+def validate_ledger_chronology(bond_id, conn):
+    """Ensure running balance of units for all accounts never drops below 0."""
+    c = conn.cursor()
+    c.execute(
+        "SELECT account, trade_date, units, transaction_type FROM transactions "
+        "WHERE bond_id=? AND transaction_type IN ('Buy', 'Sell') "
+        "ORDER BY trade_date, transaction_id",
+        (bond_id,)
+    )
+    txns = c.fetchall()
+    
+    balances = {}
+    for account, tdate, units, ttype in txns:
+        balances[account] = balances.get(account, 0.0) + units
+        if balances[account] < -1e-5:
+            return False, account, tdate
+            
+    return True, None, None
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -840,21 +635,23 @@ def _maturity_bucket(days):
 MATURITY_BUCKET_ORDER = ["0-3M", "3-6M", "6-12M", "1-2Y", "2-3Y", "3-5Y", "5Y+"]
 
 
-def _render_metric(col, style, title, value, sub=""):
-    """Render a single metric card into a Streamlit column."""
+def _render_metric(col, style, title, value, sub="", icon=""):
+    """Render a single metric card into a Streamlit column like Pragyam."""
+    style_class = style if style else "neutral"
     sub_html = f"<div class='sub-metric'>{sub}</div>" if sub else ""
+    icon_html = f'<span class="card-icon">{get_icon(icon, size=12, stroke_width=2)}</span> ' if icon else ""
     col.markdown(
-        f"<div class='metric-card {style}'><h4>{title}</h4>"
+        f"<div class='metric-card {style_class}'><h4>{icon_html}{title}</h4>"
         f"<h2>{value}</h2>{sub_html}</div>",
         unsafe_allow_html=True,
     )
 
 
 def _render_html_table(headers, rows_html):
-    """Wrap header list and row HTML into a styled table."""
+    """Wrap header list and row HTML into a styled table using portfolio-table layout."""
     th = "".join(f"<th>{h}</th>" for h in headers)
     return (
-        f"<div class='table-container'><table class='table'>"
+        f"<div class='portfolio-table'><table>"
         f"<thead><tr>{th}</tr></thead>"
         f"<tbody>{rows_html}</tbody></table></div>"
     )
@@ -874,47 +671,27 @@ def page_dashboard():
     df['ny_c'] = df['nominal_yield'] * df['cost_basis']
     df['ytc_c'] = df['yield_to_cost'] * df['cost_basis']
 
-    # ── Alerts ──
-    alerts = []
-    soon_maturing = df[df['days_to_maturity'] <= 90] if not df.empty else pd.DataFrame()
-    if not soon_maturing.empty:
-        alerts.append(f"<b>{len(soon_maturing)} bonds</b> are maturing in the next 90 days.")
-    
-    unrated = df[df['credit_rating'].isin(['Unrated', None, ''])] if not df.empty else pd.DataFrame()
-    if not unrated.empty:
-        alerts.append(f"<b>{len(unrated)} positions</b> are missing credit ratings in the security master.")
-
-    if alerts:
-        alert_html = "".join(f"<div class='alert-item'><span class='alert-icon'>⚠️</span> <span>{a}</span></div>" for a in alerts)
-        st.markdown(f"<div class='info-box alert-warning' style='margin-top:1rem;'><h4>Portfolio Alerts</h4>{alert_html}</div>", unsafe_allow_html=True)
-
     # ── Metric Cards ──
-    st.markdown(
-        "<div class='section'><div class='section-header'>"
-        "<h3 class='section-title'>Portfolio Overview</h3>"
-        "<p class='section-subtitle'>Fixed income snapshot with risk & return metrics</p>"
-        "</div></div>",
-        unsafe_allow_html=True,
-    )
-
+    st.markdown('<div class="metric-cards-container">', unsafe_allow_html=True)
     c1, c2, c3, c4, c5 = st.columns(5)
     _render_metric(c1, "primary", "Total Invested (Cost)",
                    fmt_inr_short(totals['Total Cost Basis']),
-                   f"Face Value: {fmt_inr_short(totals['Total Face Value'])}")
+                   f"Face Value: {fmt_inr_short(totals['Total Face Value'])}", icon="briefcase")
     
     ytc_disp = fmt_pct(totals['Weighted YTC']) if totals['Weighted YTC'] > 0 else "N/A"
     _render_metric(c2, "info", "Portfolio Yield (WA)",
                    ytc_disp,
-                   f"Nominal: {fmt_pct(totals['Weighted Nominal Yield'])}")
+                   f"Nominal: {fmt_pct(totals['Weighted Nominal Yield'])}", icon="trending")
     _render_metric(c3, "warning", "Annual Coupon Income",
                    fmt_inr_short(totals['Total Annual Coupon']),
-                   f"Monthly: ~{fmt_inr_short(totals['Total Annual Coupon'] / 12)}")
+                   f"Monthly: ~{fmt_inr_short(totals['Total Annual Coupon'] / 12)}", icon="activity")
     _render_metric(c4, "", "Weighted Duration",
                    f"{totals['Weighted Mac Duration']:.2f}y",
-                   f"Modified: {totals['Weighted Mod Duration']:.2f}y")
+                   f"Modified: {totals['Weighted Mod Duration']:.2f}y", icon="crosshair")
     _render_metric(c5, "", "Portfolio Composition",
                    str(totals['Num Positions']),
-                   f"{totals['Num Issuers']} issuers · {totals['Num Accounts']} accounts")
+                   f"{totals['Num Issuers']} issuers · {totals['Num Accounts']} accounts", icon="layers")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Tabs ──
     tab_alloc, tab_pos, tab_mat, tab_cf, tab_issuer, tab_ledger = st.tabs([
@@ -926,7 +703,6 @@ def page_dashboard():
     # TAB 1: Allocation & Risk (reimagined)
     # ─────────────────────────────────────────────────────────────────────
     with tab_alloc:
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         sb = df[df['cost_basis'] > 0].copy()
 
         total_cost = totals['Total Cost Basis']
@@ -937,59 +713,8 @@ def page_dashboard():
             # Use positive-cost-basis total for accurate weight calculation
             total_cost_alloc = sb['cost_basis'].sum()
 
-            # ── Yield vs Duration & X-Ray ──
-            col_chart1, col_chart2 = st.columns(2)
-            with col_chart1:
-                st.markdown("#### Yield vs. Duration")
-                fig_scatter = go.Figure()
-                fig_scatter.add_trace(go.Scatter(
-                    x=sb['modified_duration'], y=sb['yield_to_cost'],
-                    mode='markers',
-                    marker=dict(
-                        size=sb['cost_basis'],
-                        sizemode='area',
-                        sizeref=2.*max(sb['cost_basis'])/(40.**2) if not sb.empty and max(sb['cost_basis'])>0 else 1,
-                        sizemin=4,
-                        color=sb['modified_duration'],
-                        colorscale='Viridis',
-                        showscale=False,
-                        line=dict(width=1, color='rgba(255,255,255,0.2)')
-                    ),
-                    text=sb['issuer'] + '<br>YTC: ' + (sb['yield_to_cost']*100).round(2).astype(str) + '%<br>Dur: ' + sb['modified_duration'].round(2).astype(str) + 'y',
-                    hoverinfo='text'
-                ))
-                fig_scatter.update_layout(
-                    **CL,
-                    height=350,
-                    xaxis=dict(title='Modified Duration (Years)', gridcolor='rgba(255,255,255,0.05)'),
-                    yaxis=dict(title='Yield to Cost', tickformat='.1%', gridcolor='rgba(255,255,255,0.05)'),
-                    margin=dict(l=40, r=20, t=20, b=40)
-                )
-                st.plotly_chart(fig_scatter, use_container_width=True)
-
-            with col_chart2:
-                st.markdown("#### Portfolio X-Ray (Account → Issuer)")
-                import plotly.express as px
-                # Create a hierarchy df: root -> account -> issuer
-                fig_tree = px.treemap(
-                    sb, path=[px.Constant("Portfolio"), 'account', 'issuer'],
-                    values='cost_basis',
-                    color='yield_to_cost',
-                    color_continuous_scale='RdYlGn',
-                    color_continuous_midpoint=sb['yield_to_cost'].mean() if not sb.empty else 0.08
-                )
-                fig_tree.update_layout(
-                    **CL,
-                    height=350,
-                    margin=dict(l=10, r=10, t=20, b=10)
-                )
-                fig_tree.update_traces(root_color="rgba(0,0,0,0)")
-                st.plotly_chart(fig_tree, use_container_width=True)
-
-            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-
             # ── Account Capital Allocation Table ──
-            st.markdown("#### Capital Allocation by Account")
+            _render_section_header("Capital Allocation", "Portfolio distribution by account", icon="briefcase", accent="")
             acct_agg = sb.groupby('account').agg(
                 Cost=('cost_basis', 'sum'),
                 Face=('position_face_value', 'sum'),
@@ -1004,28 +729,29 @@ def page_dashboard():
             acct_agg['YC'] = acct_agg.apply(lambda r: r['YC'] / r['Cost'] if r['Cost'] > 0 else 0, axis=1)
             acct_agg = acct_agg.sort_values('Cost', ascending=False)
 
-            max_acct_wt = acct_agg['Wt'].max() if not acct_agg.empty and acct_agg['Wt'].max() > 0 else 1.0
-            acct_disp = acct_agg[['account', 'Cost', 'Face', 'Wt', 'Pos', 'Issuers', 'NY', 'YC', 'Inc']].copy()
-            st.dataframe(
-                acct_disp,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "account": st.column_config.TextColumn("Account"),
-                    "Cost": st.column_config.NumberColumn("Cost Basis", format="₹%d"),
-                    "Face": st.column_config.NumberColumn("Face Value", format="₹%d"),
-                    "Wt": st.column_config.ProgressColumn("Weight", format="%.1f%%", min_value=0, max_value=max_acct_wt*100 if max_acct_wt > 0 else 100),
-                    "Pos": st.column_config.NumberColumn("Pos", format="%d"),
-                    "Issuers": st.column_config.NumberColumn("Issuers", format="%d"),
-                    "NY": st.column_config.NumberColumn("Nominal", format="%.2f%%"),
-                    "YC": st.column_config.NumberColumn("YTC", format="%.2f%%"),
-                    "Inc": st.column_config.NumberColumn("Annual Inc", format="₹%d"),
-                }
+            acct_rows = ""
+            for _, r in acct_agg.iterrows():
+                acct_rows += (
+                    f"<tr><td><b>{r['account']}</b></td>"
+                    f"<td style='text-align:right'>{fmt_inr(r['Cost'])}</td>"
+                    f"<td style='text-align:right'>{fmt_inr(r['Face'])}</td>"
+                    f"<td style='text-align:right'>{fmt_pct(r['Wt'])}</td>"
+                    f"<td style='text-align:right'>{int(r['Pos'])}</td>"
+                    f"<td style='text-align:right'>{int(r['Issuers'])}</td>"
+                    f"<td style='text-align:right'>{fmt_pct(r['NY'])}</td>"
+                    f"<td style='text-align:right'>{fmt_pct(r['YC'])}</td>"
+                    f"<td style='text-align:right'>{fmt_inr(r['Inc'])}</td></tr>"
+                )
+            st.markdown(
+                _render_html_table(
+                    ["Account", "Cost Basis", "Face Value", "Weight", "Positions", "Issuers", "Nominal Yield", "Yield to Cost", "Annual Income"],
+                    acct_rows
+                ),
+                unsafe_allow_html=True
             )
 
         # ── Concentration Risk Table ──
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        st.markdown("#### Concentration Risk")
+        _render_section_header("Concentration Risk", "Issuer-level position weighting", icon="scale", accent="warning")
 
         conc_filter = st.selectbox(
             "Filter by Account",
@@ -1047,28 +773,29 @@ def page_dashboard():
         ir['YC'] = ir.apply(lambda r: r['YC'] / r['Cost'] if r['Cost'] > 0 else 0, axis=1)
         ir = ir.sort_values('Cost', ascending=False)
 
-        max_wt = ir['Wt'].max() if not ir.empty and ir['Wt'].max() > 0 else 1.0
-        ir_disp = ir[['issuer', 'Cost', 'Face', 'Wt', 'NY', 'YC', 'Pos']].copy()
-        st.dataframe(
-            ir_disp,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "issuer": st.column_config.TextColumn("Issuer"),
-                "Cost": st.column_config.NumberColumn("Cost Basis", format="₹%d"),
-                "Face": st.column_config.NumberColumn("Face Value", format="₹%d"),
-                "Wt": st.column_config.ProgressColumn("Weight", format="%.1f%%", min_value=0, max_value=max_wt*100 if max_wt > 0 else 100),
-                "NY": st.column_config.NumberColumn("Nominal", format="%.2f%%"),
-                "YC": st.column_config.NumberColumn("YTC", format="%.2f%%"),
-                "Pos": st.column_config.NumberColumn("Pos", format="%d"),
-            }
+        ir_rows = ""
+        for _, r in ir.iterrows():
+            ir_rows += (
+                f"<tr><td><b>{r['issuer']}</b></td>"
+                f"<td style='text-align:right'>{fmt_inr(r['Cost'])}</td>"
+                f"<td style='text-align:right'>{fmt_inr(r['Face'])}</td>"
+                f"<td style='text-align:right'>{fmt_pct(r['Wt'])}</td>"
+                f"<td style='text-align:right'>{fmt_pct(r['NY'])}</td>"
+                f"<td style='text-align:right'>{fmt_pct(r['YC'])}</td>"
+                f"<td style='text-align:right'>{int(r['Pos'])}</td></tr>"
+            )
+        st.markdown(
+            _render_html_table(
+                ["Issuer", "Cost Basis", "Face Value", "Weight", "Nominal Yield", "Yield to Cost", "Positions"],
+                ir_rows
+            ),
+            unsafe_allow_html=True
         )
 
     # ─────────────────────────────────────────────────────────────────────
     # TAB 2: Positions
     # ─────────────────────────────────────────────────────────────────────
     with tab_pos:
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         acct_filter = st.selectbox(
             "Filter by Account",
             ['All'] + sorted(df['account'].unique().tolist()),
@@ -1135,7 +862,6 @@ def page_dashboard():
     # TAB 3: Maturity Ladder
     # ─────────────────────────────────────────────────────────────────────
     with tab_mat:
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
         mat_filter = st.selectbox(
             "Filter by Account",
@@ -1202,7 +928,6 @@ def page_dashboard():
     # TAB 4: Cashflow Schedule
     # ─────────────────────────────────────────────────────────────────────
     with tab_cf:
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
         cf_filter = st.selectbox(
             "Filter by Account",
@@ -1270,7 +995,7 @@ def page_dashboard():
             cutoff = pd.to_datetime(date.today() + timedelta(days=365))
             n12 = cdf[cdf['date'] <= cutoff]
             if not n12.empty:
-                st.markdown("#### Upcoming Cashflows (Next 12 Months)")
+                _render_section_header("Nearterm Cashflows", "Projected inflows within next 12 months", icon="activity", accent="info")
                 rows = ""
                 for _, cf in n12.iterrows():
                     prin_display = fmt_inr(cf['principal']) if cf['principal'] > 0 else '-'
@@ -1294,7 +1019,6 @@ def page_dashboard():
     # TAB 5: Issuer Detail
     # ─────────────────────────────────────────────────────────────────────
     with tab_issuer:
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
         iss_filter = st.selectbox(
             "Filter by Account",
@@ -1342,7 +1066,6 @@ def page_dashboard():
     # TAB 6: Transaction Ledger
     # ─────────────────────────────────────────────────────────────────────
     with tab_ledger:
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
         led_filter = st.selectbox(
             "Filter by Account",
@@ -1414,19 +1137,60 @@ def page_dashboard():
 # PAGE: ADD SECURITY
 # ═══════════════════════════════════════════════════════════════════════
 
-def _render_section_header(title, subtitle):
-    """Render a consistent section header."""
+ICONS = {
+    "chart":      '<svg aria-label="Chart icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+    "cube":       '<svg aria-label="Cube icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+    "target":     '<svg aria-label="Target icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+    "layers":     '<svg aria-label="Layers icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+    "bar-chart":  '<svg aria-label="Bar chart icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+    "activity":   '<svg aria-label="Activity icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+    "crosshair":  '<svg aria-label="Crosshair icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>',
+    "cpu":        '<svg aria-label="CPU icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>',
+    "zap":        '<svg aria-label="Zap icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+    "shield":     '<svg aria-label="Shield icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+    "grid":       '<svg aria-label="Grid icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+    "database":   '<svg aria-label="Database icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+    "trending":   '<svg aria-label="Trending icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+    "eye":        '<svg aria-label="Eye icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+    "play":       '<svg aria-label="Play icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>',
+    "chevron-right": '<svg aria-label="Expand icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>',
+    "download":   '<svg aria-label="Download icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    "briefcase":  '<svg aria-label="Portfolio icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
+    "compass":    '<svg aria-label="Regime icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>',
+    "scale":      '<svg aria-label="Weighting icon" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></svg>',
+}
+
+
+def get_icon(name: str, size: int = 18, stroke_width: float = 1.5) -> str:
+    """Return an SVG icon string with custom size and stroke width."""
+    import re
+    base_svg = ICONS.get(name, ICONS["chart"])
+    base_svg = re.sub(r'\s+width="[^"]*"', '', base_svg)
+    base_svg = re.sub(r'\s+height="[^"]*"', '', base_svg)
+    base_svg = re.sub(r'\s+stroke-width="[^"]*"', '', base_svg)
+    return base_svg.replace('<svg', f'<svg width="{size}" height="{size}" stroke-width="{stroke_width}"')
+
+
+def _render_section_header(title, subtitle="", icon="chart", accent=""):
+    """Render a consistent premium section header like Pragyam Quant Terminal."""
+    svg = get_icon(icon, size=16, stroke_width=1.8)
+    icon_class = f"icon {accent}" if accent else "icon"
+    hdr_class = f"section-hdr {accent}" if accent else "section-hdr"
+    desc_html = f'<div class="desc">{subtitle}</div>' if subtitle else ""
     st.markdown(
-        f"<div class='section'><div class='section-header'>"
-        f"<h3 class='section-title'>{title}</h3>"
-        f"<p class='section-subtitle'>{subtitle}</p>"
-        f"</div></div>",
+        f'<div class="{hdr_class}">'
+        f'<div class="{icon_class}">{svg}</div>'
+        f'<div class="text">'
+        f'<h3>{title}</h3>'
+        f'{desc_html}'
+        f'</div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
 
 def page_add_security():
-    _render_section_header("Add New Security", "Register a bond in the securities master before transacting")
+    _render_section_header("Add New Security", "Register a bond in the securities master before transacting", icon="cube", accent="cyan")
 
     with st.form("add_sec"):
         c1, c2 = st.columns(2)
@@ -1446,6 +1210,7 @@ def page_add_security():
             sector = st.text_input("Sector", value="Financials")
             listing = st.selectbox("Listing", ["Unlisted", "NSE", "BSE", "Both"])
         with c4:
+            idate = st.date_input("Issue Date", value=None)
             dc = st.selectbox("Day Count", DAY_COUNT_CONVENTIONS)
 
         notes = st.text_area("Notes")
@@ -1456,6 +1221,8 @@ def page_add_security():
                 st.error("Issuer and ISIN are required.")
             elif mat <= date.today():
                 st.error("Maturity date must be in the future.")
+            elif idate is not None and mat <= idate:
+                st.error("Maturity date must be after the issue date.")
             elif not db_query("SELECT 1 FROM securities WHERE isin=?", (isin,)).empty:
                 st.error(f"ISIN **{isin}** already exists in the securities master.")
             else:
@@ -1467,11 +1234,11 @@ def page_add_security():
                 if ok:
                     db_execute(
                         "INSERT INTO security_metadata "
-                        "(bond_id, bond_type, credit_rating, day_count, listing, sector, notes) "
-                        "VALUES (?,?,?,?,?,?,?)",
-                        (bid, btype, cr, dc, listing, sector, notes),
+                        "(bond_id, bond_type, credit_rating, day_count, issue_date, listing, sector, notes) "
+                        "VALUES (?,?,?,?,?,?,?,?)",
+                        (bid, btype, cr, dc, idate.isoformat() if idate else None, listing, sector, notes),
                     )
-                    st.success(f"Security **{issuer}** ({isin}) added!")
+                    set_notification(f"Security **{issuer}** ({isin}) added!", "success")
                     logger.info(f"Added security: {isin}")
                     st.rerun()
 
@@ -1489,7 +1256,7 @@ def _safe_index(options, value, default=0):
 
 
 def page_edit_security():
-    _render_section_header("Edit Security", "Update security master data and metadata")
+    _render_section_header("Edit Security", "Update security master data and metadata", icon="scale", accent="violet")
 
     secs = db_query("SELECT * FROM securities")
     if secs.empty:
@@ -1563,6 +1330,8 @@ def page_edit_security():
                 "Listing", listing_opts,
                 index=_safe_index(listing_opts, meta['listing'] if meta is not None else None),
             )
+            meta_idate = pd.to_datetime(meta['issue_date']).date() if meta is not None and pd.notna(meta['issue_date']) else None
+            idate = st.date_input("Issue Date", value=meta_idate)
             dc = st.selectbox(
                 "Day Count", DAY_COUNT_CONVENTIONS,
                 index=_safe_index(DAY_COUNT_CONVENTIONS, meta['day_count'] if meta is not None else None),
@@ -1576,16 +1345,18 @@ def page_edit_security():
         if st.form_submit_button("UPDATE SECURITY"):
             if not issuer:
                 st.error("Issuer required.")
+            elif idate is not None and mat <= idate:
+                st.error("Maturity date must be after the issue date.")
             else:
                 db_execute(
                     "UPDATE securities SET issuer=?, maturity_date=?, frequency=?, coupon_rate=?, face_value=? WHERE bond_id=?",
                     (issuer, mat.isoformat(), freq, cpn / 100, fv, bid),
                 )
                 db_execute(
-                    "UPDATE security_metadata SET bond_type=?, credit_rating=?, day_count=?, listing=?, sector=?, notes=? WHERE bond_id=?",
-                    (btype, cr, dc, listing, sector, notes, bid),
+                    "UPDATE security_metadata SET bond_type=?, credit_rating=?, day_count=?, issue_date=?, listing=?, sector=?, notes=? WHERE bond_id=?",
+                    (btype, cr, dc, idate.isoformat() if idate else None, listing, sector, notes, bid),
                 )
-                st.success(f"**{issuer}** updated!")
+                set_notification(f"**{issuer}** updated!", "success")
                 logger.info(f"Updated security: {bid}")
                 st.rerun()
 
@@ -1596,7 +1367,7 @@ def page_edit_security():
 
 def page_record_transaction(show_header=True):
     if show_header:
-        _render_section_header("Record Transaction", "Record a Buy, Sell, Interest Receipt, or Principal Repayment")
+        _render_section_header("Record Transaction", "Record a Buy, Sell, Interest Receipt, or Principal Repayment", icon="zap", accent="emerald")
 
     secs = db_query("SELECT bond_id, issuer, isin FROM securities")
     if secs.empty:
@@ -1613,7 +1384,7 @@ def page_record_transaction(show_header=True):
     # Show selected security context (reactive to dropdown change)
     sec_info = db_query(
         "SELECT s.coupon_rate, s.face_value, s.frequency, s.maturity_date, "
-        "COALESCE(m.credit_rating, 'Unrated') as credit_rating "
+        "COALESCE(m.credit_rating, 'Unrated') as credit_rating, m.issue_date "
         "FROM securities s LEFT JOIN security_metadata m ON s.bond_id=m.bond_id "
         "WHERE s.bond_id=?", (bid,),
     )
@@ -1664,6 +1435,12 @@ def page_record_transaction(show_header=True):
             amount = units * price
             st.markdown(f"**Amount: {fmt_inr(amount)}**")
             adjust_fv = False
+            
+            # Fat-finger pricing check warning
+            price_dev = abs(price - si['face_value']) / si['face_value'] if si['face_value'] > 0 else 0.0
+            if price_dev > 0.5 and price > 0:
+                st.warning(f"Warning: Price {fmt_inr(price)} deviates by >50% from par value {fmt_inr(si['face_value'])}.")
+                st.checkbox("Confirm this price deviation is correct", key="confirm_price_rec")
         elif ttype == 'Principal_Repayment':
             current_units = units_by_account.get(account, 0.0)
             amount = st.number_input("Total Amount", min_value=0.0, format="%.2f")
@@ -1679,7 +1456,24 @@ def page_record_transaction(show_header=True):
         notes = st.text_area("Notes")
 
         if st.form_submit_button("RECORD TRANSACTION"):
-            # Sell validation: check sufficient units before proceeding
+            # 1. Date boundaries check
+            issue_date = pd.to_datetime(si['issue_date']).date() if pd.notna(si['issue_date']) else None
+            maturity_date = pd.to_datetime(si['maturity_date']).date()
+            if issue_date is not None and tdate < issue_date:
+                st.error(f"Transaction date ({tdate}) cannot be before the bond's issue date ({issue_date}).")
+                st.stop()
+            if tdate > maturity_date:
+                st.error(f"Transaction date ({tdate}) cannot be after the bond's maturity date ({maturity_date}).")
+                st.stop()
+
+            # 2. Fat-finger check confirmation
+            if ttype in ["Buy", "Sell"]:
+                price_dev = abs(price - si['face_value']) / si['face_value'] if si['face_value'] > 0 else 0.0
+                if price_dev > 0.5 and not st.session_state.get("confirm_price_rec", False):
+                    st.error("Please check the confirmation box to verify the unusual transaction price.")
+                    st.stop()
+
+            # 3. Sell validation: check sufficient units
             if ttype == 'Sell':
                 held = db_query(
                     "SELECT SUM(units) as total FROM transactions WHERE bond_id=? AND account=? AND transaction_type IN ('Buy', 'Sell')",
@@ -1691,10 +1485,7 @@ def page_record_transaction(show_header=True):
                     st.error(f"Insufficient units. Available: **{available:.0f}**, trying to sell: **{units:.0f}**")
                     st.stop()
 
-            tid = str(uuid.uuid4())
-            stored_units = -abs(units) if ttype == 'Sell' else abs(units)
-
-            # Compute per-unit adjustment for principal repayment
+            # 4. Repayment cap check
             if ttype == 'Principal_Repayment':
                 held = db_query(
                     "SELECT SUM(units) as total FROM transactions WHERE bond_id=? AND account=? AND transaction_type IN ('Buy', 'Sell')",
@@ -1702,6 +1493,23 @@ def page_record_transaction(show_header=True):
                 )
                 raw = held['total'].iloc[0] if not held.empty else 0
                 current_units = float(raw) if pd.notna(raw) else 0.0
+                
+                repaid_df = db_query(
+                    "SELECT SUM(amount) as total FROM transactions WHERE bond_id=? AND account=? AND transaction_type='Principal_Repayment'",
+                    (bid, account),
+                )
+                prior_repaid = float(repaid_df['total'].iloc[0]) if not repaid_df.empty and pd.notna(repaid_df['total'].iloc[0]) else 0.0
+                
+                outstanding_face = (current_units * si['face_value']) - prior_repaid
+                if amount > outstanding_face + 1e-2:
+                    st.error(f"Repayment amount ({fmt_inr(amount)}) cannot exceed outstanding face value ({fmt_inr(outstanding_face)}).")
+                    st.stop()
+
+            tid = str(uuid.uuid4())
+            stored_units = -abs(units) if ttype == 'Sell' else abs(units)
+
+            # Compute per-unit adjustment for principal repayment
+            if ttype == 'Principal_Repayment':
                 price = amount / current_units if current_units > 0 else 0.0
 
             stored_amount = units * price if ttype in ["Buy", "Sell"] else amount
@@ -1713,9 +1521,16 @@ def page_record_transaction(show_header=True):
                         "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?)",
                         (tid, bid, account, tdate.isoformat(), ttype, stored_units, price, stored_amount, notes)
                     )
+                    
+                    # 5. Chronological balance check
+                    ok, offending_acct, offending_date = validate_ledger_chronology(bid, conn)
+                    if not ok:
+                        st.error(f"Transaction rejected. This would cause Account **{offending_acct}** to have negative holdings on {pd.to_datetime(offending_date).strftime('%d %b %Y')}.")
+                        st.stop()
+                        
                     conn.commit()
 
-                st.success(f"**{ttype.replace('_', ' ')}** recorded!")
+                set_notification(f"**{ttype.replace('_', ' ')}** recorded!", "success")
                 logger.info(f"Recorded {ttype} for {bid}")
                 st.rerun()
             except sqlite3.Error as e:
@@ -1728,7 +1543,7 @@ def page_record_transaction(show_header=True):
 # ═══════════════════════════════════════════════════════════════════════
 
 def page_edit_transaction():
-    _render_section_header("Edit Transaction", "Correct or delete an existing transaction entry")
+    _render_section_header("Edit Transaction", "Correct or delete an existing transaction entry", icon="layers", accent="rose")
 
     txns = db_query(
         "SELECT t.*, s.issuer, s.isin FROM transactions t "
@@ -1754,7 +1569,7 @@ def page_edit_transaction():
     # Reactive security context panel
     sec_ctx = db_query(
         "SELECT s.coupon_rate, s.face_value, s.frequency, s.maturity_date, "
-        "COALESCE(m.credit_rating, 'Unrated') as credit_rating "
+        "COALESCE(m.credit_rating, 'Unrated') as credit_rating, m.issue_date "
         "FROM securities s LEFT JOIN security_metadata m ON s.bond_id=m.bond_id "
         "WHERE s.bond_id=?", (txn['bond_id'],),
     )
@@ -1791,6 +1606,12 @@ def page_edit_transaction():
                 p = st.number_input("Price", min_value=0.0, format="%.4f", value=float(txn['price']))
                 a = u * p
                 st.markdown(f"**Amount: {fmt_inr(a)}**")
+                
+                # Fat-finger pricing check warning
+                price_dev = abs(p - sc['face_value']) / sc['face_value'] if sc['face_value'] > 0 else 0.0
+                if price_dev > 0.5 and p > 0:
+                    st.warning(f"Warning: Price {fmt_inr(p)} deviates by >50% from par value {fmt_inr(sc['face_value'])}.")
+                    st.checkbox("Confirm this price deviation is correct", key="confirm_price_edit")
             else:
                 u = 0
                 p = 0.0
@@ -1814,12 +1635,29 @@ def page_edit_transaction():
                 st.error(f"Changing transaction type from **{old_type}** to **{tt}** is not allowed. "
                          "Delete this transaction and create a new one instead.")
             else:
+                # 1. Date boundaries check
+                issue_date = pd.to_datetime(sc['issue_date']).date() if pd.notna(sc['issue_date']) else None
+                maturity_date = pd.to_datetime(sc['maturity_date']).date()
+                if issue_date is not None and td < issue_date:
+                    st.error(f"Transaction date ({td}) cannot be before the bond's issue date ({issue_date}).")
+                    st.stop()
+                if td > maturity_date:
+                    st.error(f"Transaction date ({td}) cannot be after the bond's maturity date ({maturity_date}).")
+                    st.stop()
+
+                # 2. Fat-finger check confirmation
+                if tt in ["Buy", "Sell"]:
+                    price_dev = abs(p - sc['face_value']) / sc['face_value'] if sc['face_value'] > 0 else 0.0
+                    if price_dev > 0.5 and not st.session_state.get("confirm_price_edit", False):
+                        st.error("Please check the confirmation box to verify the unusual transaction price.")
+                        st.stop()
+
                 if tt in ["Buy", "Sell"]:
                     final_amount = u * p
                     final_price = p
                     final_units = -abs(u) if tt == 'Sell' else abs(u)
 
-                    # Sell validation: ensure sufficient units
+                    # 3. Sell validation: ensure sufficient units
                     if tt == 'Sell':
                         held = db_query(
                             "SELECT SUM(units) as total FROM transactions "
@@ -1841,6 +1679,18 @@ def page_edit_transaction():
                     )
                     raw = held['total'].iloc[0] if not held.empty else 0
                     current_units = float(raw) if pd.notna(raw) else 0.0
+                    
+                    # 4. Repayment cap check
+                    repaid_df = db_query(
+                        "SELECT SUM(amount) as total FROM transactions WHERE bond_id=? AND account=? AND transaction_id!=? AND transaction_type='Principal_Repayment'",
+                        (bond_id, acct, tid),
+                    )
+                    prior_repaid = float(repaid_df['total'].iloc[0]) if not repaid_df.empty and pd.notna(repaid_df['total'].iloc[0]) else 0.0
+                    outstanding_face = (current_units * sc['face_value']) - prior_repaid
+                    if a > outstanding_face + 1e-2:
+                        st.error(f"Repayment amount ({fmt_inr(a)}) cannot exceed outstanding face value ({fmt_inr(outstanding_face)}).")
+                        st.stop()
+                        
                     final_price = a / current_units if current_units > 0 else 0.0
                 else:
                     final_amount = a
@@ -1855,19 +1705,36 @@ def page_edit_transaction():
                             "units=?, price=?, amount=?, notes=? WHERE transaction_id=?",
                             (acct, td.isoformat(), tt, final_units, final_price, final_amount, notes, tid),
                         )
+                        
+                        # 5. Chronological balance check
+                        ok, offending_acct, offending_date = validate_ledger_chronology(bond_id, conn)
+                        if not ok:
+                            st.error(f"Transaction update rejected. This would cause Account **{offending_acct}** to have negative holdings on {pd.to_datetime(offending_date).strftime('%d %b %Y')}.")
+                            st.stop()
+                            
                         conn.commit()
-                    st.success("Transaction updated!")
+                        
+                    set_notification("Transaction updated!", "success")
                     st.rerun()
                 except sqlite3.Error as e:
                     st.error(f"Update failed: {e}")
 
         if delete_btn:
+            bond_id = txn['bond_id']
             try:
                 with _connect() as conn:
                     c = conn.cursor()
                     c.execute("DELETE FROM transactions WHERE transaction_id=?", (tid,))
+                    
+                    # 5. Chronological balance check on deletion
+                    ok, offending_acct, offending_date = validate_ledger_chronology(bond_id, conn)
+                    if not ok:
+                        st.error(f"Transaction deletion rejected. This would cause Account **{offending_acct}** to have negative holdings on {pd.to_datetime(offending_date).strftime('%d %b %Y')}.")
+                        st.stop()
+                        
                     conn.commit()
-                st.success("Transaction deleted!")
+                    
+                set_notification("Transaction deleted!", "success")
                 st.rerun()
             except sqlite3.Error as e:
                 st.error(f"Deletion failed: {e}")
@@ -1878,9 +1745,9 @@ def page_edit_transaction():
 # ═══════════════════════════════════════════════════════════════════════
 
 def page_view_transactions():
-    _render_section_header("Transaction Ledger", "Complete audit trail of all portfolio activity")
+    _render_section_header("Transaction Ledger", "Complete audit trail of all portfolio activity", icon="database", accent="cyan")
 
-    with st.expander("💸 Record New Transaction", expanded=False):
+    with st.expander("Record New Transaction", expanded=False):
         page_record_transaction(show_header=False)
     
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
@@ -1954,7 +1821,7 @@ def page_view_transactions():
 # ═══════════════════════════════════════════════════════════════════════
 
 def page_securities_master():
-    _render_section_header("Securities Master", "Complete registry of all bonds in the system")
+    _render_section_header("Securities Master", "Complete registry of all bonds in the system", icon="cpu", accent="")
 
     secs = db_query(
         "SELECT s.*, m.bond_type, m.credit_rating, m.sector, m.listing "
@@ -2017,54 +1884,72 @@ def page_securities_master():
 # ═══════════════════════════════════════════════════════════════════════
 
 PAGE_ROUTES = {
-    "📊 Dashboard":          lambda: page_dashboard(),
-    "📝 Transaction Ledger": lambda: page_view_transactions(),
-    "🏢 Securities Master":  lambda: page_securities_master(),
-    "➕ Add Security":       lambda: page_add_security(),
-    "✏️ Edit Security":      lambda: page_edit_security(),
-    "💸 Record Transaction": lambda: page_record_transaction(),
-    "📝 Edit Transaction":   lambda: page_edit_transaction(),
+    "Dashboard":             lambda: page_dashboard(),
+    "Transaction Ledger":    lambda: page_view_transactions(),
+    "Securities Master":     lambda: page_securities_master(),
+    "Add Security":          lambda: page_add_security(),
+    "Edit Security":         lambda: page_edit_security(),
+    "Record Transaction":    lambda: page_record_transaction(),
+    "Edit Transaction":      lambda: page_edit_transaction(),
 }
+
+
+def _render_footer() -> None:
+    """Render the app footer with copyright and version info."""
+    ist_now = datetime.now()
+    st.markdown(
+        f'<div class="app-footer">'
+        f'<div class="content">'
+        f'© {ist_now.year} <strong>{PRODUCT_NAME}</strong> &nbsp;·&nbsp; {COMPANY} &nbsp;·&nbsp; v{VERSION} &nbsp;·&nbsp; {ist_now.strftime("%Y-%m-%d %H:%M:%S")} Local'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def main():
     db_init()
+    show_notifications()
 
     # ── Sidebar ──
     with st.sidebar:
         st.markdown(
-            f"<div style='text-align:center;padding:1rem 0;margin-bottom:1rem;'>"
-            f"<div style='font-size:1.75rem;font-weight:800;color:#FFC300;'>{PRODUCT_NAME.upper()}</div>"
-            f"<div style='color:#888;font-size:0.75rem;margin-top:0.25rem;'>"
-            f"{PRODUCT_DEVANAGARI} | Bond Portfolio Ledger</div></div>",
+            f"""
+            <div style="text-align:center;padding:0.5rem 0 0.75rem 0;">
+                <div style="font-family:var(--display);font-size:1.35rem;font-weight:700;color:var(--amber);letter-spacing:0.04em;">{PRODUCT_NAME.upper()}</div>
+                <div style="font-family:var(--data);color:var(--ink-tertiary);font-size:0.6rem;margin-top:0.1rem;letter-spacing:0.06em;text-transform:uppercase;">{PRODUCT_DEVANAGARI} | Bond Portfolio Ledger</div>
+            </div>
+            <hr style="margin: 0.5rem 0; opacity: 0.1;">
+            """,
             unsafe_allow_html=True,
         )
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="sidebar-title">Analytics</div>', unsafe_allow_html=True)
-        page1 = st.radio("AnalyticsNav", [
-            "📊 Dashboard", "📝 Transaction Ledger", "🏢 Securities Master"
-        ], label_visibility="collapsed", key="nav_1")
-
-        st.markdown('<div class="section-divider" style="margin:1rem 0;"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="sidebar-title">Operations</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-title">Navigation</div>', unsafe_allow_html=True)
+        pages = ["Dashboard", "Transaction Ledger", "Securities Master", "Add Security", "Edit Security", "Record Transaction", "Edit Transaction"]
+        page = st.selectbox("Navigation", pages, label_visibility="collapsed", key="nav_main")
         
-        page2 = st.radio("OpsNav", [
-            "None", "➕ Add Security", "✏️ Edit Security", 
-            "💸 Record Transaction", "📝 Edit Transaction"
-        ], label_visibility="collapsed", key="nav_2")
-        
-        # State management for dual radios
-        if page2 != "None":
-            page = page2
-        else:
-            page = page1
-
-
+        # Show spec box matching Pragyam's version box
+        st.markdown('<hr style="margin: 2.00rem 0; opacity: 0.05;">', unsafe_allow_html=True)
+        try:
+            sec_count = db_query("SELECT COUNT(*) as c FROM securities")['c'].iloc[0]
+            txn_count = db_query("SELECT COUNT(*) as c FROM transactions")['c'].iloc[0]
+        except Exception:
+            sec_count = 0
+            txn_count = 0
+        rows = [
+            '<div class="system-spec">',
+            f'<div class="spec-row"><span class="spec-label">Version</span><span class="spec-value">{VERSION}</span></div>',
+            f'<div class="spec-row"><span class="spec-label">Securities</span><span class="spec-value">{sec_count}</span></div>',
+            f'<div class="spec-row"><span class="spec-label">Transactions</span><span class="spec-value">{txn_count}</span></div>',
+            '<div class="spec-row"><span class="spec-label">Database</span><span class="spec-value">SQLite (WAL)</span></div>',
+            f'<div class="spec-row"><span class="spec-label">Product</span><span class="spec-value">{COMPANY}</span></div>',
+            '</div>'
+        ]
+        st.markdown(''.join(rows), unsafe_allow_html=True)
 
     # ── Header ──
     st.markdown(
         f'<div class="premium-header">'
-        f'<h1>{PRODUCT_NAME.upper()} : Bond Portfolio Ledger</h1>'
+        f'<h1>{PRODUCT_NAME.upper()}</h1>'
         f'<div class="tagline">{TAGLINE}</div></div>',
         unsafe_allow_html=True,
     )
@@ -2073,6 +1958,9 @@ def main():
     handler = PAGE_ROUTES.get(page)
     if handler:
         handler()
+
+    # ── Footer ──
+    _render_footer()
 
 
 if __name__ == "__main__":

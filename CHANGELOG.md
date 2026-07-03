@@ -2,6 +2,18 @@
 
 All notable changes to Nivesa are documented here.
 
+## [2.4.0] — 2026-07
+
+### Fixed
+- **Table Row Hover** — eliminated column shift by removing transform on hover for portfolio tables and markdown tables
+- **Portfolio Composition Icon** — replaced grid icon with layers icon for better visual clarity
+- **Vertical Rhythm** — standardized spacing between header, cards, and tabs using consistent design tokens
+
+### Changed
+- **Navigation Flow** — consolidated dual dropdowns (Analytics + Operations) into single unified Navigation dropdown for seamless user experience
+- **Section Headers** — added descriptive subtitles to Capital Allocation, Concentration Risk, and Nearterm Cashflows sections
+- **Section Headers** — renamed "Capital Allocation by Account" to "Capital Allocation" and "Upcoming Cashflows (Next 12 Months)" to "Nearterm Cashflows"
+
 ## [2.0.0] — 2025-07
 
 ### Added
