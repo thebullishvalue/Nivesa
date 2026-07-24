@@ -162,6 +162,19 @@ def db_init():
                 WHERE bond_id NOT IN (SELECT bond_id FROM security_metadata)
             """)
 
+            # Migration: track which Principal_Repayment transaction "owns" the
+            # face-value step-down for its (bond_id, trade_date) group, so a
+            # bond redeemed pro-rata across multiple accounts on the same date
+            # only decrements face_value once, not once per account. Existing
+            # repayments predate this column and already had their real-world
+            # effect reflected in face_value (manually, before this feature
+            # existed) — flagging them as owners now means editing/deleting one
+            # later reverses correctly instead of re-applying a second cut.
+            existing_cols = [r[1] for r in c.execute("PRAGMA table_info(transactions)").fetchall()]
+            if 'owns_face_adj' not in existing_cols:
+                c.execute("ALTER TABLE transactions ADD COLUMN owns_face_adj INTEGER NOT NULL DEFAULT 0")
+                c.execute("UPDATE transactions SET owns_face_adj=1 WHERE transaction_type='Principal_Repayment'")
+
             conn.commit()
             logger.info("Database initialized / migrated OK.")
     except sqlite3.Error as e:
@@ -252,6 +265,40 @@ def validate_ledger_chronology(bond_id, conn):
             return False, account, tdate
             
     return True, None, None
+
+
+def claim_face_adjustment(c, bond_id, trade_date, tid, price):
+    """Apply a Principal_Repayment's per-unit face-value step-down UNLESS
+    another transaction already owns the step-down for this (bond, date)
+    group — a bond redeemed pro-rata across multiple accounts on the same
+    date must only reduce face_value once, not once per account entry."""
+    owner = c.execute(
+        "SELECT 1 FROM transactions WHERE bond_id=? AND trade_date=? AND "
+        "transaction_type='Principal_Repayment' AND owns_face_adj=1 AND transaction_id!=?",
+        (bond_id, trade_date, tid),
+    ).fetchone()
+    if owner is None:
+        c.execute("UPDATE securities SET face_value = face_value - ? WHERE bond_id=?", (price, bond_id))
+        c.execute("UPDATE transactions SET owns_face_adj=1 WHERE transaction_id=?", (tid,))
+    else:
+        c.execute("UPDATE transactions SET owns_face_adj=0 WHERE transaction_id=?", (tid,))
+
+
+def release_face_adjustment(c, bond_id, trade_date, tid, price):
+    """Reverse a repayment's face-value step-down (its transaction is being
+    edited or deleted) and, if another repayment shares its (bond, date)
+    group, promote that one to own the step-down instead — the real-world
+    redemption still happened even though this particular row is going away."""
+    c.execute("UPDATE securities SET face_value = face_value + ? WHERE bond_id=?", (price, bond_id))
+    follower = c.execute(
+        "SELECT transaction_id, price FROM transactions WHERE bond_id=? AND trade_date=? AND "
+        "transaction_type='Principal_Repayment' AND transaction_id!=? ORDER BY transaction_id LIMIT 1",
+        (bond_id, trade_date, tid),
+    ).fetchone()
+    if follower:
+        f_tid, f_price = follower
+        c.execute("UPDATE securities SET face_value = face_value - ? WHERE bond_id=?", (f_price, bond_id))
+        c.execute("UPDATE transactions SET owns_face_adj=1 WHERE transaction_id=?", (f_tid,))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1795,7 +1842,9 @@ def page_record_transaction(show_header=True):
                 with closing(_connect()) as conn, conn:
                     c = conn.cursor()
                     c.execute(
-                        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO transactions "
+                        "(transaction_id, bond_id, account, trade_date, transaction_type, units, price, amount, notes) "
+                        "VALUES (?,?,?,?,?,?,?,?,?)",
                         (tid, bid, account, tdate.isoformat(), ttype, stored_units, price, stored_amount, notes)
                     )
 
@@ -1803,12 +1852,11 @@ def page_record_transaction(show_header=True):
                     # outstanding face value per unit down by this repayment's
                     # per-unit amount, so it stays the "CURRENT outstanding face
                     # per unit" that positions, YTC, and the repayment cap check
-                    # all assume it already is.
+                    # all assume it already is. A bond redeemed pro-rata across
+                    # multiple accounts on the same date must only apply this
+                    # step-down once (see claim_face_adjustment).
                     if ttype == 'Principal_Repayment':
-                        c.execute(
-                            "UPDATE securities SET face_value = face_value - ? WHERE bond_id=?",
-                            (price, bid),
-                        )
+                        claim_face_adjustment(c, bid, tdate.isoformat(), tid, price)
 
                     # 5. Chronological balance check
                     ok, offending_acct, offending_date = validate_ledger_chronology(bid, conn)
@@ -1996,14 +2044,27 @@ def page_edit_transaction():
                             (acct, td.isoformat(), tt, final_units, final_price, final_amount, notes, tid),
                         )
 
-                        # Undo the old repayment's per-unit face-value step-down
-                        # and apply the new one, keeping face_value the current
-                        # outstanding face per unit.
+                        # Keep face_value in sync with the edited repayment. If
+                        # this row still owns the step-down for the same (bond,
+                        # date) group, just re-price it in place — running a
+                        # full release+reclaim here would hand ownership to
+                        # another same-date row (a different account's entry)
+                        # and silently drop this edit. Only release/reclaim
+                        # when the row is moving to a different date group or
+                        # wasn't the owner to begin with.
                         if tt == 'Principal_Repayment':
-                            c.execute(
-                                "UPDATE securities SET face_value = face_value + ? - ? WHERE bond_id=?",
-                                (float(txn['price']), final_price, bond_id),
-                            )
+                            old_date = txn['trade_date']
+                            was_owner = int(txn['owns_face_adj']) == 1
+                            if was_owner and old_date == td.isoformat():
+                                if final_price != float(txn['price']):
+                                    c.execute(
+                                        "UPDATE securities SET face_value = face_value + ? - ? WHERE bond_id=?",
+                                        (float(txn['price']), final_price, bond_id),
+                                    )
+                            else:
+                                if was_owner:
+                                    release_face_adjustment(c, bond_id, old_date, tid, float(txn['price']))
+                                claim_face_adjustment(c, bond_id, td.isoformat(), tid, final_price)
 
                         # 5. Chronological balance check
                         ok, offending_acct, offending_date = validate_ledger_chronology(bond_id, conn)
@@ -2023,14 +2084,15 @@ def page_edit_transaction():
             try:
                 with closing(_connect()) as conn, conn:
                     c = conn.cursor()
-                    c.execute("DELETE FROM transactions WHERE transaction_id=?", (tid,))
 
-                    # Reverse this repayment's per-unit face-value step-down.
-                    if orig_type == 'Principal_Repayment':
-                        c.execute(
-                            "UPDATE securities SET face_value = face_value + ? WHERE bond_id=?",
-                            (float(txn['price']), bond_id),
-                        )
+                    # Reverse this repayment's per-unit face-value step-down
+                    # (promoting another same-date repayment to own it, if one
+                    # exists) BEFORE deleting the row, since the promotion
+                    # query needs to see the sibling rows still in the table.
+                    if orig_type == 'Principal_Repayment' and int(txn['owns_face_adj']) == 1:
+                        release_face_adjustment(c, bond_id, txn['trade_date'], tid, float(txn['price']))
+
+                    c.execute("DELETE FROM transactions WHERE transaction_id=?", (tid,))
 
                     # 5. Chronological balance check on deletion
                     ok, offending_acct, offending_date = validate_ledger_chronology(bond_id, conn)
