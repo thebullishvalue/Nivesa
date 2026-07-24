@@ -1798,7 +1798,18 @@ def page_record_transaction(show_header=True):
                         "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?)",
                         (tid, bid, account, tdate.isoformat(), ttype, stored_units, price, stored_amount, notes)
                     )
-                    
+
+                    # Principal repayments amortize the bond: step the security's
+                    # outstanding face value per unit down by this repayment's
+                    # per-unit amount, so it stays the "CURRENT outstanding face
+                    # per unit" that positions, YTC, and the repayment cap check
+                    # all assume it already is.
+                    if ttype == 'Principal_Repayment':
+                        c.execute(
+                            "UPDATE securities SET face_value = face_value - ? WHERE bond_id=?",
+                            (price, bid),
+                        )
+
                     # 5. Chronological balance check
                     ok, offending_acct, offending_date = validate_ledger_chronology(bid, conn)
                     if not ok:
@@ -1984,7 +1995,16 @@ def page_edit_transaction():
                             "units=?, price=?, amount=?, notes=? WHERE transaction_id=?",
                             (acct, td.isoformat(), tt, final_units, final_price, final_amount, notes, tid),
                         )
-                        
+
+                        # Undo the old repayment's per-unit face-value step-down
+                        # and apply the new one, keeping face_value the current
+                        # outstanding face per unit.
+                        if tt == 'Principal_Repayment':
+                            c.execute(
+                                "UPDATE securities SET face_value = face_value + ? - ? WHERE bond_id=?",
+                                (float(txn['price']), final_price, bond_id),
+                            )
+
                         # 5. Chronological balance check
                         ok, offending_acct, offending_date = validate_ledger_chronology(bond_id, conn)
                         if not ok:
@@ -2004,7 +2024,14 @@ def page_edit_transaction():
                 with closing(_connect()) as conn, conn:
                     c = conn.cursor()
                     c.execute("DELETE FROM transactions WHERE transaction_id=?", (tid,))
-                    
+
+                    # Reverse this repayment's per-unit face-value step-down.
+                    if orig_type == 'Principal_Repayment':
+                        c.execute(
+                            "UPDATE securities SET face_value = face_value + ? WHERE bond_id=?",
+                            (float(txn['price']), bond_id),
+                        )
+
                     # 5. Chronological balance check on deletion
                     ok, offending_acct, offending_date = validate_ledger_chronology(bond_id, conn)
                     if not ok:
