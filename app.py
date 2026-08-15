@@ -53,6 +53,10 @@ CREDIT_RATINGS = [
 ]
 DAY_COUNT_CONVENTIONS = ["30/360", "Actual/365", "Actual/360", "Actual/Actual"]
 TRANSACTION_TYPES = ["Buy", "Sell", "Interest_Receipt", "Principal_Repayment"]
+# Same-day settlement order for the running cost-basis engine: a buy settles
+# before a sale of the same units, and a principal repayment reduces the basis
+# of units still held before any same-day sale is struck against that basis.
+FLOW_ORDER = {'Buy': 0, 'Principal_Repayment': 1, 'Sell': 2}
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGE CONFIG & DATA PATHS
@@ -267,6 +271,24 @@ def validate_ledger_chronology(bond_id, conn):
     return True, None, None
 
 
+def face_step_claimed(bond_id, trade_date, exclude_tid=None):
+    """Per-unit face step-down already applied to `securities.face_value` by an
+    earlier Principal_Repayment in this (bond, date) group.
+
+    Repayment cap checks add this back before comparing against face_value:
+    the step-down is claimed once per group (see claim_face_adjustment), so
+    every account's share of the same pro-rata redemption must be measured
+    against the face as it stood BEFORE that one step-down."""
+    q = ("SELECT price FROM transactions WHERE bond_id=? AND trade_date=? AND "
+         "transaction_type='Principal_Repayment' AND owns_face_adj=1")
+    params = [bond_id, trade_date]
+    if exclude_tid is not None:
+        q += " AND transaction_id!=?"
+        params.append(exclude_tid)
+    r = db_query(q, tuple(params))
+    return float(r['price'].iloc[0]) if not r.empty and pd.notna(r['price'].iloc[0]) else 0.0
+
+
 def claim_face_adjustment(c, bond_id, trade_date, tid, price):
     """Apply a Principal_Repayment's per-unit face-value step-down UNLESS
     another transaction already owns the step-down for this (bond, date)
@@ -401,6 +423,32 @@ def day_count_fraction(start_date, end_date, convention="Actual/365"):
         return 0.0
 
 
+def prev_coupon_date(maturity_str, frequency, as_of):
+    """The coupon date on or immediately before `as_of`, walking the schedule
+    back from maturity — the same maturity-anchored grid every projection in
+    this module uses."""
+    d = pd.to_datetime(maturity_str).date()
+    months = 12 // FREQ_MAP.get(frequency, 1)
+    while d > as_of:
+        d -= relativedelta(months=months)
+    return d
+
+
+def accrued_at(balance, coupon_rate, frequency, maturity_str, as_of, day_count="Actual/365"):
+    """Interest accrued on `balance` between the previous coupon date and
+    `as_of`.
+
+    Added to the price when solving for a yield. Market convention is that the
+    DIRTY price (clean + accrued) equals the PV of the full contractual
+    coupons; without this term the solver hands the holder a whole coupon for a
+    period they did not own. Because the coupon grid is anchored at MATURITY,
+    the first projected coupon can fall a day after the purchase and still pay
+    a full period — worth up to 72bps of phantom yield on a monthly payer
+    (verified against a prorated-first-coupon reference across the book)."""
+    pc = prev_coupon_date(maturity_str, frequency, as_of)
+    return balance * coupon_rate * day_count_fraction(pc, as_of, day_count)
+
+
 def calc_accrued_interest(face_value, coupon_rate, frequency, day_count="Actual/365", last_coupon_date=None, maturity_date=None):
     try:
         today = date.today()
@@ -420,15 +468,24 @@ def calc_accrued_interest(face_value, coupon_rate, frequency, day_count="Actual/
         return 0.0
 
 
-def calc_macaulay_duration(fv, coupon_rate, frequency, maturity_str, ytm, day_count="Actual/365"):
+def calc_macaulay_duration(fv, coupon_rate, frequency, maturity_str, ytm, day_count="Actual/365",
+                           schedule=None):
+    """Macaulay duration of the REMAINING cashflows.
+
+    `schedule` lets the caller supply the position's actual projected stream.
+    Defaulting to a bullet for a bond that is amortizing overstates duration
+    badly — an amortizer whose balance steps down monthly measured 1.50y as a
+    phantom bullet against 0.33y on its real declining-balance stream (+357%).
+    `fv`/`schedule` may be per-unit or position-level; duration is scale-free."""
     try:
         mat_date = pd.to_datetime(maturity_str).date()
         today = date.today()
         if mat_date <= today or ytm <= 0: return 0.0
-        
-        schedule = generate_cashflow_schedule(fv, coupon_rate, frequency, maturity_str)
+
+        if schedule is None:
+            schedule = generate_cashflow_schedule(fv, coupon_rate, frequency, maturity_str)
         if not schedule: return 0.0
-        
+
         freq = FREQ_MAP.get(frequency, 1)
         pv_w = pv_s = 0.0
         for cf in schedule:
@@ -447,25 +504,36 @@ def calc_modified_duration(mac, ytm, frequency):
     return mac / (1 + ytm / freq) if ytm > 0 else mac
 
 
-def calc_yield_to_cost(fv_pu, cost_pu, coupon_rate, maturity_str, frequency, day_count="Actual/365", as_of=None):
-    """Yield actually locked in at purchase: the IRR equating the price paid
-    per unit to ALL cashflows from the purchase date to maturity.
+def calc_yield_to_cost(fv, cost, coupon_rate, maturity_str, frequency, day_count="Actual/365",
+                       as_of=None, schedule=None):
+    """Yield locked in at `as_of`: the NOMINAL annual rate, compounded at the
+    coupon frequency, equating the dirty price to the cashflows to maturity.
 
     `as_of` is the valuation/purchase anchor (default today). Anchoring at the
     purchase date is what makes this a true *yield-to-cost*: discounting only
     the REMAINING cashflows from today against the ORIGINAL cost — while
     dropping coupons already received — made the number drift as the bond
     seasoned (verified: +72bps on a seasoned discount bond, -66bps on a
-    premium bond). Anchoring at purchase makes it invariant to seasoning."""
+    premium bond). Anchoring at purchase makes it invariant to seasoning.
+
+    `schedule` overrides the default bullet projection (pass an amortizing
+    stream for an amortizing bond). `fv`/`cost`/`schedule` must share a scale —
+    all per-unit or all position-level; the IRR is scale-free either way."""
     try:
         mat_date = pd.to_datetime(maturity_str).date()
         anchor = as_of if as_of is not None else date.today()
-        if mat_date <= anchor or cost_pu <= 0: return 0.0
+        if mat_date <= anchor or cost <= 0: return 0.0
 
-        schedule = generate_cashflow_schedule(fv_pu, coupon_rate, frequency, maturity_str, as_of=anchor)
+        if schedule is None:
+            schedule = generate_cashflow_schedule(fv, coupon_rate, frequency, maturity_str, as_of=anchor)
         if not schedule: return 0.0
 
         freq = FREQ_MAP.get(frequency, 1)
+        # Dirty price = clean cost + interest accrued since the last coupon.
+        # The cashflows below are full contractual coupons, so the price they
+        # are solved against must carry the accrued leg too (see accrued_at).
+        price = cost + accrued_at(fv, coupon_rate, frequency, maturity_str, anchor, day_count)
+
         cfs = []
         for cf in schedule:
             t = day_count_fraction(anchor, cf['date'], day_count)
@@ -476,26 +544,25 @@ def calc_yield_to_cost(fv_pu, cost_pu, coupon_rate, maturity_str, frequency, day
 
         y = 0.08
         for _ in range(100):
-            npv = -cost_pu
+            # Clamp BEFORE accumulating: re-solving `y` mid-summation mixed
+            # discount factors from two different rates into one NPV.
+            if 1 + y / freq <= 1e-4:
+                y = freq * (1e-4 - 1)
+            factor = 1 + y / freq
+
+            npv = -price
             d_npv = 0.0
             for t, cf in cfs:
-                factor = 1 + y / freq
-                if factor <= 0.0001:
-                    y = -freq + 0.0001 * freq
-                    factor = 1 + y / freq
-                term = factor ** (-freq * t)
-                npv += cf * term
-                d_npv += -t * cf * (factor ** (-freq * t - 1))
+                npv += cf * factor ** (-freq * t)
+                d_npv += -t * cf * factor ** (-freq * t - 1)
 
             if abs(d_npv) < 1e-12:
                 break
 
             dy = npv / d_npv
-            y_new = y - dy
-            if abs(dy) < 1e-8:
-                y = y_new
+            y -= dy
+            if abs(dy) < 1e-10:
                 break
-            y = y_new
 
         if np.isnan(y) or np.isinf(y) or y < -1.0 or y > 5.0:
             return 0.0
@@ -504,9 +571,16 @@ def calc_yield_to_cost(fv_pu, cost_pu, coupon_rate, maturity_str, frequency, day
         return 0.0
 
 
-def _xirr(cashflows):
-    """Money-weighted IRR of dated (date, amount) cashflows. Newton on
-    Actual/365 time from the earliest date; returns 0.0 if degenerate."""
+def _xirr(cashflows, freq=1):
+    """Money-weighted IRR of dated (date, amount) cashflows, returned as a
+    NOMINAL annual rate compounded `freq` times a year.
+
+    The compounding basis matters: an effective-annual IRR sitting in a column
+    beside a nominal coupon rate is not comparable, and reporting one overstated
+    YTC by 50-92bps across a monthly-pay book — enough to show 32 of 36
+    premium-bought positions yielding MORE than their coupon, which is
+    impossible. Newton on Actual/365 time from the earliest date; returns 0.0
+    if degenerate."""
     if len(cashflows) < 2:
         return 0.0
     cfs = sorted(cashflows)
@@ -516,21 +590,23 @@ def _xirr(cashflows):
     signs = {1 if a > 0 else (-1 if a < 0 else 0) for _, a in ts}
     if not (1 in signs and -1 in signs):
         return 0.0
+    m = max(1, int(freq))
     y = 0.10
     for _ in range(200):
+        # Clamp before accumulating (see calc_yield_to_cost).
+        if 1 + y / m <= 1e-6:
+            y = m * (1e-6 - 1)
+        base = 1 + y / m
+
         f = df = 0.0
         for t, a in ts:
-            base = 1 + y
-            if base <= 1e-6:
-                y = -1 + 1e-6
-                base = 1 + y
-            f  += a / base ** t
-            df += -t * a / base ** (t + 1)
+            f  += a * base ** (-m * t)
+            df += -t * a * base ** (-m * t - 1)
         if abs(df) < 1e-12:
             break
         step = f / df
         y -= step
-        if abs(step) < 1e-9:
+        if abs(step) < 1e-10:
             break
     if np.isnan(y) or np.isinf(y) or y < -0.999 or y > 5.0:
         return 0.0
@@ -540,7 +616,9 @@ def _xirr(cashflows):
 def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
                                 face_value_pu, day_count="Actual/365"):
     """True money-weighted yield-to-cost for a whole position, robust to
-    principal amortization and multiple purchases.
+    principal amortization and multiple purchases. Returned as a NOMINAL annual
+    rate compounded at the coupon frequency, directly comparable to the coupon
+    rate and to calc_yield_to_cost.
 
     Cashflows: Buys are outflows; Sells, Interest_Receipts and
     Principal_Repayments are inflows (at their actual dates). Coupons are
@@ -601,8 +679,20 @@ def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
         bu = buys_df['units'].abs()
         word = (bu * buys_df['trade_date'].apply(lambda x: pd.to_datetime(x).toordinal())).sum()
         anchor = date.fromordinal(int(round(word / bu.sum()))) if bu.sum() > 0 else pd.to_datetime(buys_df['trade_date'].min()).date()
+
+        # Project coupons only over the stretch the RECORDED receipts do not
+        # already cover. Every Interest_Receipt above is already an inflow at
+        # its actual date; projecting the same coupon again counted it twice
+        # and inflated YTC by +703bps on a 4y annual payer with two receipts
+        # recorded. With no receipts on file the cutoff is the anchor, so a
+        # ledger that tracks only purchases is unaffected.
+        rx = txns[txns['transaction_type'] == 'Interest_Receipt']
+        cutoff = anchor
+        if not rx.empty:
+            cutoff = max(cutoff, pd.to_datetime(rx['trade_date']).max().date())
+
         cds, dd = [], mat
-        while dd > anchor:
+        while dd > cutoff:
             cds.append(dd)
             dd -= relativedelta(months=months)
         for d in sorted(cds):
@@ -611,7 +701,16 @@ def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
                 cfs.append((d, bal * coupon_rate / freq))
         cfs.append((mat, outstanding))  # redeem remaining principal at maturity
 
-        return _xirr(cfs)
+        # The first projected coupon pays a FULL period even though the
+        # position was held for only part of it (the grid is maturity-anchored).
+        # Charge the unearned portion as an outflow at the cutoff — the
+        # standard dirty-price treatment. See accrued_at.
+        bal_at_cutoff = original_face - sum(a for rd, a in reps if rd <= cutoff)
+        acc = accrued_at(bal_at_cutoff, coupon_rate, frequency, maturity_str, cutoff, day_count)
+        if acc > 0:
+            cfs.append((cutoff, -acc))
+
+        return _xirr(cfs, freq)
     except (ValueError, TypeError, ZeroDivisionError, FloatingPointError):
         return 0.0
 
@@ -622,10 +721,18 @@ def generate_amortizing_schedule(outstanding, coupon_rate, frequency, maturity_s
     DECLINING balance plus principal installments on the inferred cadence,
     with any residual redeemed at maturity. `installment`/`period_months` are
     estimated from recorded repayment history; this is a projection, not a
-    contractual schedule. Falls back to a bullet if no cadence is known."""
+    contractual schedule. Falls back to a bullet when no cadence is known
+    (installment/period_months of 0), so this is the single projection entry
+    point for both amortizing and bullet positions."""
     try:
         mat = pd.to_datetime(maturity_str).date()
         anchor = as_of if as_of is not None else date.today()
+        # A matured bond has no FUTURE cashflows. Without this guard the
+        # residual redemption below was emitted at a past-dated maturity, so a
+        # bond that had already redeemed still contributed its full outstanding
+        # principal to "Principal Due" and to the projected cashflow chart.
+        if mat <= anchor:
+            return []
         freq = FREQ_MAP.get(frequency, 1)
         cmonths = 12 // freq
 
@@ -659,7 +766,6 @@ def generate_amortizing_schedule(outstanding, coupon_rate, frequency, maturity_s
         all_dates = sorted(set(cds) | set(prin_by_date.keys()))
         cfs = []
         bal = outstanding
-        prev = anchor
         for d in all_dates:
             coupon = 0.0
             if d in cds:
@@ -669,7 +775,6 @@ def generate_amortizing_schedule(outstanding, coupon_rate, frequency, maturity_s
                         'total': coupon + prin,
                         'type': 'Maturity + Coupon' if d == mat else ('Amortization' if prin > 0 else 'Coupon')})
             bal = max(0.0, bal - prin)
-            prev = d
         return cfs
     except (ValueError, TypeError):
         return []
@@ -734,17 +839,30 @@ def get_positions_dataframe():
         # Chronological running average-cost engine.
         # Realized P&L on a Sell must use the average cost of units held AT
         # THE TIME OF SALE — a lifetime buy-VWAP would let buys made AFTER a
-        # sell retroactively change that sale's P&L (look-ahead). Same-day
-        # ties process Buys before Sells, matching validate_ledger_chronology.
-        trades = grp[grp['transaction_type'].isin(['Buy', 'Sell'])].copy()
-        trades['_ord'] = (trades['transaction_type'] == 'Sell').astype(int)
-        trades = trades.sort_values(['trade_date', '_ord'])
+        # sell retroactively change that sale's P&L (look-ahead).
+        #
+        # A Principal_Repayment is a RETURN OF CAPITAL, so it reduces the basis
+        # as it is received. Leaving the basis at full original cost meant a
+        # half-amortized bond sold at its (halved) fair value booked a phantom
+        # loss equal to the principal already returned. Capital returned beyond
+        # the remaining basis is a realized gain, and the basis floors at zero.
+        # Same-day ties run Buy → Repayment → Sell: buy-before-sell matches
+        # validate_ledger_chronology, and a repayment reduces the basis of units
+        # still held before any same-day sale is struck against it.
+        flows = grp[grp['transaction_type'].isin(FLOW_ORDER)].copy()
+        flows['_ord'] = flows['transaction_type'].map(FLOW_ORDER)
+        flows = flows.sort_values(['trade_date', '_ord'])
 
         units_held = cost_held = r_pnl = 0.0
-        for _, tr in trades.iterrows():
-            if tr['transaction_type'] == 'Buy':
+        for _, tr in flows.iterrows():
+            tt = tr['transaction_type']
+            if tt == 'Buy':
                 units_held += abs(tr['units'])
                 cost_held  += tr['amount']
+            elif tt == 'Principal_Repayment':
+                applied    = min(tr['amount'], cost_held)
+                cost_held -= applied
+                r_pnl     += tr['amount'] - applied
             else:  # Sell (stored with negative units)
                 su = abs(tr['units'])
                 avg = cost_held / units_held if units_held > 0 else 0.0
@@ -755,32 +873,46 @@ def get_positions_dataframe():
         cur_u = units_held
         if cur_u <= 0: continue
 
-        avg_px   = cost_held / units_held if units_held > 0 else 0.0
         int_recv = grp[grp['transaction_type'] == 'Interest_Receipt']['amount'].sum()
         reps_df  = grp[grp['transaction_type'] == 'Principal_Repayment'].sort_values('trade_date')
         prin_rep = reps_df['amount'].sum()
-        cost     = cost_held - prin_rep
+        cost     = cost_held  # already net of principal returned, see above
+        avg_px   = cost / units_held if units_held > 0 else 0.0
 
         # Infer the amortization cadence from recorded repayments so the cashflow
         # projection can step the remaining principal down realistically instead
         # of dropping it all at maturity as a phantom bullet. Estimate only —
-        # the forward schedule is not stored.
-        amort_installment = float(reps_df['amount'].median()) if len(reps_df) else 0.0
-        if len(reps_df) >= 2:
-            gaps = reps_df['trade_date'].diff().dropna().dt.days
-            amort_months = int(max(1, round(gaps.median() / 30.44)))
+        # the forward schedule is not stored. Zeroed when nothing has been
+        # repaid, which makes generate_amortizing_schedule emit a plain bullet.
+        if len(reps_df):
+            amort_installment = float(reps_df['amount'].median())
+            if len(reps_df) >= 2:
+                gaps = reps_df['trade_date'].diff().dropna().dt.days
+                amort_months = int(max(1, round(gaps.median() / 30.44)))
+            else:
+                amort_months = 12 // FREQ_MAP.get(si['frequency'], 1)
         else:
-            amort_months = 12 // FREQ_MAP.get(si['frequency'], 1)
+            amort_installment = 0.0
+            amort_months = 0
 
         # Outstanding face = current units * current (post-amortization) face per
         # unit. face_value already reflects the outstanding balance, so it must
         # NOT be reduced by principal_repaid again — doing so double-counted
         # amortization and drove YTC negative on amortizing bonds.
         face     = cur_u * si['face_value']
-        cost_pu  = cost / cur_u if cur_u else 0
-        fv_pu    = face / cur_u if cur_u else 0
-        
+
         day_count = mi['day_count'] if mi is not None and pd.notna(mi['day_count']) else 'Actual/365'
+
+        # ONE projected stream per position, shared by the duration engine, the
+        # today-anchored yield and the Cashflow tab: declining balance when the
+        # bond amortizes, bullet otherwise. Previously the risk metrics assumed
+        # a bullet while the Cashflow tab projected the amortizing stream, so
+        # the two disagreed by as much as ₹64k of principal on one position and
+        # duration ran up to 357% too long.
+        proj = generate_amortizing_schedule(
+            face, si['coupon_rate'], si['frequency'], si['maturity_date'],
+            amort_installment, amort_months,
+        )
 
         # YTC = true money-weighted yield-to-cost over the position's actual
         # cashflows (repayments counted as inflows, coupons on the declining
@@ -789,38 +921,36 @@ def get_positions_dataframe():
         ytc = calc_position_yield_to_cost(grp, si['coupon_rate'], si['frequency'], si['maturity_date'], si['face_value'], day_count)
         # Duration is a TODAY risk metric: discount the REMAINING cashflows at a
         # today-anchored yield (best current-yield proxy absent a market mark).
-        y_today = calc_yield_to_cost(fv_pu, cost_pu, si['coupon_rate'], si['maturity_date'], si['frequency'], day_count, as_of=date.today())
+        y_today = calc_yield_to_cost(face, cost, si['coupon_rate'], si['maturity_date'],
+                                     si['frequency'], day_count, as_of=date.today(), schedule=proj)
         if y_today > 0:
-            mac = calc_macaulay_duration(fv_pu, si['coupon_rate'], si['frequency'], si['maturity_date'], y_today, day_count)
+            mac = calc_macaulay_duration(face, si['coupon_rate'], si['frequency'],
+                                         si['maturity_date'], y_today, day_count, schedule=proj)
             mod = calc_modified_duration(mac, y_today, si['frequency'])
         else:
             mac = 0.0
             mod = 0.0
-            
+
         dtm = calc_days_to_maturity(si['maturity_date'])
-        ann_cpn = cur_u * fv_pu * si['coupon_rate']
-        
+        ann_cpn = face * si['coupon_rate']
+
         # Compute real last coupon date
         mat_date = pd.to_datetime(si['maturity_date']).date()
         today = date.today()
-        freq = FREQ_MAP.get(si['frequency'], 1)
-        months = 12 // freq
-        last_coupon = mat_date
-        while last_coupon > today:
-            last_coupon -= relativedelta(months=months)
-        
+        last_coupon = prev_coupon_date(si['maturity_date'], si['frequency'], today)
+
         # Cap last coupon at issue_date if available
         issue_date = pd.to_datetime(mi['issue_date']).date() if mi is not None and pd.notna(mi['issue_date']) else None
         if issue_date is not None:
             last_coupon = max(last_coupon, issue_date)
-        
+
         # Set accrued interest to 0 if matured
         if mat_date <= today:
             acc_int = 0.0
         else:
-            acc_int = calc_accrued_interest(fv_pu, si['coupon_rate'], si['frequency'], day_count, last_coupon, mat_date) * cur_u
-            
-        first_buy = trades.loc[trades['transaction_type'] == 'Buy', 'trade_date'].min()
+            acc_int = calc_accrued_interest(face, si['coupon_rate'], si['frequency'], day_count, last_coupon, mat_date)
+
+        first_buy = flows.loc[flows['transaction_type'] == 'Buy', 'trade_date'].min()
         hold_days = (pd.to_datetime(date.today()) - first_buy).days if pd.notna(first_buy) else 0
 
         positions.append({
@@ -921,8 +1051,13 @@ CL = dict(
 # PAGE: DASHBOARD
 # ═══════════════════════════════════════════════════════════════════════
 
-def _maturity_bucket(days):
-    """Classify days-to-maturity into ladder buckets."""
+def _maturity_bucket(days, matured=False):
+    """Classify days-to-maturity into ladder buckets.
+
+    `matured` is explicit because calc_days_to_maturity floors at 0, so a bond
+    that redeemed last month is indistinguishable from one maturing today and
+    was being shown as a live 0-3M holding."""
+    if matured:      return "Matured"
     if days <= 90:   return "0-3M"
     if days <= 180:  return "3-6M"
     if days <= 365:  return "6-12M"
@@ -932,7 +1067,7 @@ def _maturity_bucket(days):
     return "5Y+"
 
 
-MATURITY_BUCKET_ORDER = ["0-3M", "3-6M", "6-12M", "1-2Y", "2-3Y", "3-5Y", "5Y+"]
+MATURITY_BUCKET_ORDER = ["Matured", "0-3M", "3-6M", "6-12M", "1-2Y", "2-3Y", "3-5Y", "5Y+"]
 
 
 def _render_metric(col, style, title, value, sub="", icon=""):
@@ -985,7 +1120,7 @@ def page_dashboard():
     ytc_disp = fmt_pct(totals['Weighted YTC']) if totals['Weighted YTC'] > 0 else "N/A"
     _render_metric(c2, "info", "Portfolio Yield (WA)",
                    ytc_disp,
-                   f"Nominal: {fmt_pct(totals['Weighted Nominal Yield'])}", icon="trending")
+                   f"Coupon: {fmt_pct(totals['Weighted Nominal Yield'])}", icon="trending")
     _render_metric(c3, "warning", "Annual Coupon Income",
                    fmt_inr_short(totals['Total Annual Coupon']),
                    f"Monthly: ~{fmt_inr_short(totals['Total Annual Coupon'] / 12)}", icon="activity")
@@ -995,6 +1130,28 @@ def page_dashboard():
     _render_metric(c5, "", "Portfolio Composition",
                    str(totals['Num Positions']),
                    f"{totals['Num Issuers']} issuers · {totals['Num Accounts']} accounts", icon="layers")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Second row — income realised and returned to date, plus the maturity
+    # anchor for the duration figure above.
+    st.markdown('<div class="metric-cards-container">', unsafe_allow_html=True)
+    c6, c7, c8, c9, c10 = st.columns(5)
+    _render_metric(c6, "success", "Accrued Interest",
+                   fmt_inr_short(totals['Total Accrued Interest']),
+                   "Earned, not yet received", icon="activity")
+    _render_metric(c7, "", "Interest Received",
+                   fmt_inr_short(totals['Total Interest Received']),
+                   "Coupons booked to date", icon="download")
+    _render_metric(c8, "", "Principal Repaid",
+                   fmt_inr_short(totals['Total Principal Repaid']),
+                   "Capital returned to date", icon="scale")
+    r_pnl_total = totals['Total Realized PnL']
+    _render_metric(c9, "success" if r_pnl_total >= 0 else "danger", "Realized P&L",
+                   fmt_inr_short(r_pnl_total),
+                   "On sold units & excess principal", icon="trending")
+    _render_metric(c10, "violet", "Weighted Avg Maturity",
+                   f"{totals['Weighted Avg Maturity']:.2f}y",
+                   f"Duration: {totals['Weighted Mac Duration']:.2f}y", icon="target")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Tabs ──
@@ -1008,8 +1165,6 @@ def page_dashboard():
     # ─────────────────────────────────────────────────────────────────────
     with tab_alloc:
         sb = df[df['cost_basis'] > 0].copy()
-
-        total_cost = totals['Total Cost Basis']
 
         if sb.empty:
             st.info("No positions with positive cost basis to display.")
@@ -1049,7 +1204,7 @@ def page_dashboard():
                 )
             st.markdown(
                 _render_html_table(
-                    ["Account", "Cost Basis", "Face Value", "Weight", "Positions", "Issuers", "Nominal Yield", "Yield to Cost", "Annual Income"],
+                    ["Account", "Cost Basis", "Face Value", "Weight", "Positions", "Issuers", "Coupon (WA)", "Yield to Cost", "Annual Income"],
                     acct_rows
                 ),
                 unsafe_allow_html=True
@@ -1092,7 +1247,7 @@ def page_dashboard():
             )
         st.markdown(
             _render_html_table(
-                ["Issuer", "Cost Basis", "Face Value", "Weight", "Nominal Yield", "Yield to Cost", "Positions"],
+                ["Issuer", "Cost Basis", "Face Value", "Weight", "Coupon (WA)", "Yield to Cost", "Positions"],
                 ir_rows
             ),
             unsafe_allow_html=True
@@ -1154,7 +1309,7 @@ def page_dashboard():
             'issuer': 'Issuer', 'isin': 'ISIN', 'account': 'Account',
             'credit_rating': 'Rating', 'current_units': 'Units',
             'cost_basis': 'Cost Basis', 'position_face_value': 'Face Value',
-            'nominal_yield': 'Nominal Yield (%)', 'yield_to_cost': 'YTC (%)',
+            'nominal_yield': 'Coupon Rate (%)', 'yield_to_cost': 'YTC (%)',
             'macaulay_duration': 'Mac Duration', 'modified_duration': 'Mod Duration',
             'maturity_date': 'Maturity Date', 'annual_coupon_income': 'Annual Income',
             'interest_received': 'Interest Received', 'days_to_maturity': 'Days Left'
@@ -1180,11 +1335,20 @@ def page_dashboard():
         )
         mat_df = df.copy() if mat_filter == 'All' else df[df['account'] == mat_filter].copy()
 
-        mat_df['mb'] = mat_df['days_to_maturity'].apply(_maturity_bucket)
+        _today_ts = pd.Timestamp(date.today())
+        mat_df['mb'] = mat_df.apply(
+            lambda p: _maturity_bucket(
+                p['days_to_maturity'],
+                matured=pd.to_datetime(p['maturity_date']) < _today_ts,
+            ),
+            axis=1,
+        )
+        # Only show buckets that actually hold something, in ladder order.
+        present = [b for b in MATURITY_BUCKET_ORDER if (mat_df['mb'] == b).any()]
         bucket_agg = (
             mat_df.groupby('mb')
             .agg(Cost=('cost_basis', 'sum'), Face=('position_face_value', 'sum'), N=('bond_id', 'count'))
-            .reindex(MATURITY_BUCKET_ORDER)
+            .reindex(present)
             .fillna(0)
         )
 
@@ -1253,18 +1417,16 @@ def page_dashboard():
         all_cf = []
         has_amort = False
         for _, p in cf_df.iterrows():
-            if p.get('amort_installment', 0) > 0 or p.get('principal_repaid', 0) > 0:
-                # Amortizing: project declining balance + inferred installments.
+            # One projection entry point for every position — the SAME stream
+            # the duration engine discounts. generate_amortizing_schedule steps
+            # the balance down when a cadence was inferred and degenerates to a
+            # bullet when it wasn't, so the two views can no longer diverge.
+            if p['principal_repaid'] > 0:
                 has_amort = True
-                schedule = generate_amortizing_schedule(
-                    p['position_face_value'], p['coupon_rate'], p['frequency'],
-                    p['maturity_date'], p.get('amort_installment', 0.0), p.get('amort_months', 0),
-                )
-            else:
-                fvpu = p['position_face_value'] / p['current_units'] if p['current_units'] > 0 else 0
-                schedule = generate_cashflow_schedule(
-                    fvpu, p['coupon_rate'], p['frequency'], p['maturity_date'], p['current_units'],
-                )
+            schedule = generate_amortizing_schedule(
+                p['position_face_value'], p['coupon_rate'], p['frequency'],
+                p['maturity_date'], p['amort_installment'], p['amort_months'],
+            )
             for cf in schedule:
                 cf['issuer'] = p['issuer']
                 cf['account'] = p['account']
@@ -1377,7 +1539,7 @@ def page_dashboard():
             )
         st.markdown(
             _render_html_table(
-                ["Issuer", "ISIN", "Units", "Cost", "Face", "Weight", "Nominal", "YTC", "Annual Inc"],
+                ["Issuer", "ISIN", "Units", "Cost", "Face", "Weight", "Coupon (WA)", "YTC", "Annual Inc"],
                 rows,
             ),
             unsafe_allow_html=True,
@@ -1813,18 +1975,21 @@ def page_record_transaction(show_header=True):
                 )
                 raw = held['total'].iloc[0] if not held.empty else 0
                 current_units = float(raw) if pd.notna(raw) else 0.0
-                
-                repaid_df = db_query(
-                    "SELECT SUM(amount) as total FROM transactions WHERE bond_id=? AND account=? AND transaction_type='Principal_Repayment'",
-                    (bid, account),
-                )
-                prior_repaid = float(repaid_df['total'].iloc[0]) if not repaid_df.empty and pd.notna(repaid_df['total'].iloc[0]) else 0.0
-                
+
                 # face_value holds the CURRENT outstanding face per unit, so the
-                # maximum still repayable is units*face_value. (Subtracting
-                # prior_repaid here as well double-counted amortization and
+                # maximum still repayable is units*face_value. (Subtracting the
+                # prior repaid total here as well double-counted amortization and
                 # wrongly blocked legitimate repayments.)
-                outstanding_face = current_units * si['face_value']
+                #
+                # But a bond redeemed pro-rata across several accounts on the
+                # same date steps face_value down only ONCE, when the first
+                # account's entry claims it. Measuring the later accounts against
+                # the already-reduced face rejected their legitimate share — on a
+                # full redemption face_value hits 0 and the second account could
+                # never record anything. Add the claimed step-down back so every
+                # account in the group is checked against the same pre-redemption
+                # face.
+                outstanding_face = current_units * (si['face_value'] + face_step_claimed(bid, tdate.isoformat()))
                 if amount > outstanding_face + 1e-2:
                     st.error(f"Repayment amount ({fmt_inr(amount)}) cannot exceed outstanding face value ({fmt_inr(outstanding_face)}).")
                     st.stop()
@@ -2017,14 +2182,16 @@ def page_edit_transaction():
                     current_units = float(raw) if pd.notna(raw) else 0.0
                     
                     # 4. Repayment cap check
-                    repaid_df = db_query(
-                        "SELECT SUM(amount) as total FROM transactions WHERE bond_id=? AND account=? AND transaction_id!=? AND transaction_type='Principal_Repayment'",
-                        (bond_id, acct, tid),
-                    )
-                    prior_repaid = float(repaid_df['total'].iloc[0]) if not repaid_df.empty and pd.notna(repaid_df['total'].iloc[0]) else 0.0
                     # face_value = current outstanding face per unit; max
                     # repayable is units*face_value (see record-transaction path).
-                    outstanding_face = current_units * sc['face_value']
+                    # Two step-downs may need adding back before the comparison:
+                    # this row's own, if it currently owns one (face_value
+                    # already reflects it), and any other owner in the group this
+                    # row is moving TO.
+                    face_before = sc['face_value'] + face_step_claimed(bond_id, td.isoformat(), exclude_tid=tid)
+                    if int(txn['owns_face_adj']) == 1:
+                        face_before += float(txn['price'])
+                    outstanding_face = current_units * face_before
                     if a > outstanding_face + 1e-2:
                         st.error(f"Repayment amount ({fmt_inr(a)}) cannot exceed outstanding face value ({fmt_inr(outstanding_face)}).")
                         st.stop()
