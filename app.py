@@ -33,8 +33,8 @@ import calendar
 # APPLICATION CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
-VERSION = "2.7.0"
-BUILD = "2026.07.PROJECTION_FIDELITY"
+VERSION = "2.8.0"
+BUILD = "2026.08.YIELD_BASIS"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
 COMPANY = "Hemrek Capital"
@@ -1130,28 +1130,6 @@ def page_dashboard():
     _render_metric(c5, "", "Portfolio Composition",
                    str(totals['Num Positions']),
                    f"{totals['Num Issuers']} issuers · {totals['Num Accounts']} accounts", icon="layers")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Second row — income realised and returned to date, plus the maturity
-    # anchor for the duration figure above.
-    st.markdown('<div class="metric-cards-container">', unsafe_allow_html=True)
-    c6, c7, c8, c9, c10 = st.columns(5)
-    _render_metric(c6, "success", "Accrued Interest",
-                   fmt_inr_short(totals['Total Accrued Interest']),
-                   "Earned, not yet received", icon="activity")
-    _render_metric(c7, "", "Interest Received",
-                   fmt_inr_short(totals['Total Interest Received']),
-                   "Coupons booked to date", icon="download")
-    _render_metric(c8, "", "Principal Repaid",
-                   fmt_inr_short(totals['Total Principal Repaid']),
-                   "Capital returned to date", icon="scale")
-    r_pnl_total = totals['Total Realized PnL']
-    _render_metric(c9, "success" if r_pnl_total >= 0 else "danger", "Realized P&L",
-                   fmt_inr_short(r_pnl_total),
-                   "On sold units & excess principal", icon="trending")
-    _render_metric(c10, "violet", "Weighted Avg Maturity",
-                   f"{totals['Weighted Avg Maturity']:.2f}y",
-                   f"Duration: {totals['Weighted Mac Duration']:.2f}y", icon="target")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Tabs ──
