@@ -2,6 +2,21 @@
 
 All notable changes to Nivesa are documented here.
 
+## [2.8.0] — 2026-08
+
+### Fixed
+- **Yield compounding basis** — position YTC was returned as an effective annual rate while every other yield (coupon, `calc_yield_to_cost`) is nominal, compounded at the coupon frequency. The two were shown side by side and averaged together. On a monthly-pay book this overstated YTC by 50–92bps and made 32 of 36 premium-bought positions appear to yield *more* than their coupon, which is impossible. `_xirr` now takes the compounding frequency.
+- **Phantom stub coupon** — the coupon grid is anchored at maturity, so the first projected coupon could fall a day after purchase and still pay a full period. Yields now solve against the dirty price (cost + accrued), the market-standard treatment. Worth up to 72bps on one position.
+- **Duration ignored amortization** — `calc_macaulay_duration` always assumed a bullet, so a bond repaying principal was discounted as if the whole balance sat at maturity. One position measured 1.50y against a true 0.33y (+357%); another +40%. Duration, the today-anchored yield and the Cashflow tab now share one projected stream per position.
+- **Interest receipts double-counted** — a recorded `Interest_Receipt` was booked as an inflow *and* re-projected as a future coupon, inflating YTC by +703bps on a 4y annual payer with two receipts on file. Projection now starts after the last recorded receipt.
+- **Realized P&L on amortizing bonds** — principal repayments did not reduce the cost basis, so selling a half-amortized bond at fair value booked a phantom loss equal to the principal already returned. Repayments now reduce basis as received; capital returned beyond basis is a realized gain.
+- **Matured bonds projected future cashflows** — `generate_amortizing_schedule` emitted the residual redemption at a past-dated maturity, adding phantom principal to "Principal Due" and to the cashflow chart. Matured positions now also get their own maturity-ladder bucket instead of showing as live 0-3M holdings.
+- **Pro-rata redemption across accounts** — `face_value` steps down once per (bond, date) group, but the repayment cap checked later accounts against the already-reduced face. On a full redemption the second account could never record its share.
+- **NPV solver** — both Newton solvers re-solved the rate mid-summation on the domain guard, mixing discount factors from two different rates into one NPV.
+
+### Changed
+- **"Nominal Yield" relabelled "Coupon"** — the column holds the coupon rate. Now that YTC is on a nominal basis too, the old label invited confusion between "nominal yield" (the coupon) and "nominal rate" (the compounding convention).
+
 ## [2.4.0] — 2026-07
 
 ### Fixed
