@@ -2,6 +2,13 @@
 
 All notable changes to Nivesa are documented here.
 
+## [3.0.2] — 2026-11-10 — *Tattva's tab icon*
+
+### Changed
+- The browser-tab icon is Tattva's exact mark — its cobalt ring-and-line in Tattva's own
+  base64 encoding — so the three apps' tabs match. (Browsers that cached the old gold icon
+  pick up the new one with the changed icon address.)
+
 ## [3.0.1] — 2026-11 — *iPad: the page fills the screen when the rail is collapsed*
 
 ### Fixed
