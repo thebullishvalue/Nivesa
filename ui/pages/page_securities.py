@@ -81,12 +81,12 @@ def render_securities_page() -> None:
     """Operations · Securities — the master registry."""
     secs = securities_master()
     if secs.empty:
-        render_section_header("Securities Master", "No securities registered.", icon="grid")
+        render_section_header("Securities Master", "No securities registered.", icon="cube")
         render_empty_state("No securities yet", "The securities master is empty.", eyebrow="Securities",
                            action_label="Add one under Operations → Add Security.")
         return
 
-    render_section_header("Securities Master", _answer(secs), icon="grid")
+    render_section_header("Securities Master", _answer(secs), icon="cube")
     sm_type, sm_rating, sm_search = _filters(secs)
     filtered = securities_master(sm_type, sm_rating, sm_search)
     if filtered.empty:
