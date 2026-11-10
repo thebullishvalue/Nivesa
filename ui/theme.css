@@ -2665,3 +2665,64 @@
    margin, left edges unchanged. */
 [data-testid="stSidebarNavLinkContainer"] { margin: 1px 0 1px var(--s2); }
 [data-testid="stSidebarNavLink"] { padding-right: var(--s2) !important; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   18 · NIVESA — the fields, made one family (Operations pages)
+   Measured on the pinned frontend (1440 wide): a select drew 40px, a text
+   input 38px, a date input 33px and 4px short of its column, a number input
+   33px with its steppers as two grey tiles hung OUTSIDE the well; and in a
+   filter strip or a form the columns stopped one gap (16px) short of the
+   right edge. One height (38px), one well, one right edge.
+   ───────────────────────────────────────────────────────────────────────── */
+/* A strip or a form is ONE row of fields: its columns share the row exactly.
+   The page grid's no-grow rule (§14) exists for wrapping card rows; under it
+   Streamlit's basis (100%/n − gap) leaves one gap unfilled at the right edge. */
+[class*="st-key-filterbar"] [data-testid="stColumn"],
+[data-testid="stForm"] [data-testid="stColumn"] { flex-grow: 1 !important; }
+
+/* The reactive controls above a form (type · account · date) are a strip of
+   their own — the same surface as the picker strip above them. */
+[class*="st-key-filterbar-"] {
+    padding: var(--s3) var(--s4) !important;
+    background: var(--surface-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    margin-bottom: var(--s3) !important;
+}
+
+/* One height. */
+[data-testid="stMain"] .stSelectbox [data-baseweb="select"] > div { min-height: 38px !important; height: 38px; }
+[data-testid="stMain"] .stDateInput [data-baseweb="input"] { height: auto !important; padding-right: 0 !important; }
+[data-testid="stMain"] .stDateInput input { height: 38px !important; box-sizing: border-box; }
+
+/* The number input is ONE well: the container carries the border, the field
+   and the steppers sit inside it, the steppers ruled off by a hairline and
+   achromatic like every secondary control. Paper names its well colour in
+   LIGHT_TOKENS (white, as every Paper input). */
+[data-testid="stMain"] [data-testid="stNumberInputContainer"] {
+    background: var(--bg) !important;
+    border: 1px solid var(--line-strong) !important;
+    border-radius: var(--r-md) !important;
+    height: 38px; overflow: hidden;
+    transition: border-color var(--fast) var(--ease);
+}
+[data-testid="stMain"] [data-testid="stNumberInputContainer"]:focus-within { border-color: var(--accent) !important; }
+[data-testid="stMain"] .stNumberInput [data-testid="stNumberInputContainer"] input {
+    background: transparent !important; border: none !important; border-radius: 0 !important;
+    height: 36px !important;
+}
+[data-testid="stMain"] .stNumberInput [data-testid="stNumberInputContainer"] [data-baseweb="input"],
+[data-testid="stMain"] .stNumberInput [data-testid="stNumberInputContainer"] [data-baseweb="base-input"] {
+    background: transparent !important; border: none !important;
+}
+[data-testid="stMain"] .stNumberInput [data-testid="stNumberInputContainer"] button {
+    background: transparent !important; color: var(--ink-tertiary) !important;
+    border: none !important; border-left: 1px solid var(--line) !important; border-radius: 0 !important;
+    height: 36px !important;
+}
+[data-testid="stMain"] .stNumberInput [data-testid="stNumberInputContainer"] button:hover:not(:disabled) {
+    background: var(--surface-2) !important; color: var(--ink) !important;
+}
+[data-testid="stMain"] .stNumberInput [data-testid="stNumberInputContainer"] button:disabled {
+    color: var(--ink-quaternary) !important; opacity: 0.5;
+}

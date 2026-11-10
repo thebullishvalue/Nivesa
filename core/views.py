@@ -31,6 +31,8 @@ __all__ = [
     "issuer_detail", "ledger_tab", "ledger_page", "securities_master", "account_options",
     "allocation_by_bucket", "matured_mask", "maturing_soon", "tape_items", "command_bar", "book_notices",
     "rail_counts", "is_empty_book",
+    "FORWARD_WINDOW_MONTHS", "forward_window_end", "in_forward_window", "CONCENTRATION_CAUTION",
+    "CONCENTRATION_DANGER", "concentration_tier", "top_issuers", "top_share", "next_maturities",
 ]
 
 
@@ -296,6 +298,81 @@ def securities_master(sm_type='All', sm_rating='All', sm_search=''):  # seam
         filtered_secs = filtered_secs[filtered_secs['issuer'].str.contains(sm_search, case=False, na=False)]
     filtered_secs['days'] = [calc_days_to_maturity(m) for m in filtered_secs['maturity_date']]  # seam
     return filtered_secs  # seam
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ANALYTICS SLICES — new in 3.0: windows, top-N and the concentration lines over the aggregates
+# above. Slicing and classification only; every amount is one the lifted functions computed.
+# ═══════════════════════════════════════════════════════════════════════
+
+#: The Cashflows page's FORWARD windows, in calendar months. A window of n months is this month and
+#: the n − 1 that follow (3M on 10 Nov = Nov · Dec · Jan), so each bar it keeps is a whole month of
+#: the projection exactly as ``cashflow_projection`` summed it. "ALL" (any other key) keeps every month.
+FORWARD_WINDOW_MONTHS = {"3M": 3, "6M": 6, "1Y": 12, "2Y": 24}
+
+
+def forward_window_end(tf):
+    """The first calendar month AFTER forward window ``tf`` (a monthly ``pd.Period``); None = no cut."""
+    n = FORWARD_WINDOW_MONTHS.get(tf)
+    if n is None:
+        return None
+    return pd.Timestamp(date.today()).to_period("M") + n
+
+
+def in_forward_window(frame, tf):
+    """The rows of a projection frame — ``cdf`` or ``mcf`` from ``cashflow_projection``, both carry the
+    month ``mo`` — inside forward window ``tf``, unchanged. The projection itself is untouched."""
+    end = forward_window_end(tf)
+    if end is None or frame is None or frame.empty:
+        return frame
+    return frame[frame["mo"] < end]
+
+
+#: Issuer concentration lines, as a share of cost basis within the account filter: caution from 5%,
+#: danger from 10%. Below the caution line an issuer is unremarkable.
+CONCENTRATION_CAUTION = 0.05
+CONCENTRATION_DANGER = 0.10
+
+
+def concentration_tier(weight) -> str:
+    """``"danger"`` at or above the danger line, ``"caution"`` at or above the caution line, else
+    ``"neutral"`` (a missing weight is neutral)."""
+    try:
+        w = round(float(weight), 12)
+    except (TypeError, ValueError):
+        return "neutral"
+    if w != w:
+        return "neutral"
+    if w >= CONCENTRATION_DANGER:
+        return "danger"
+    if w >= CONCENTRATION_CAUTION:
+        return "caution"
+    return "neutral"
+
+
+def top_issuers(ir, n: int = 15):
+    """The ``n`` heaviest rows of an ``issuer_concentration`` frame (it is already heaviest first)."""
+    return ir.head(n)
+
+
+def top_share(ir, n: int = 5) -> float:
+    """The combined share of cost of the ``n`` heaviest issuers: their ``Wt``, added."""
+    if ir is None or ir.empty:
+        return 0.0
+    return float(ir["Wt"].head(n).sum())
+
+
+def next_maturities(df) -> pd.DataFrame:
+    """The live positions that mature next — the maturity ladder's own rows (``maturity_ladder`` /
+    ``maturity_rows``) outside the Matured bucket, on the soonest maturity date. Empty when nothing
+    is left to mature."""
+    mat_df, _ = maturity_ladder(df)
+    rows = maturity_rows(mat_df)
+    live = rows[rows["mb"] != "Matured"]
+    if live.empty:
+        return live
+    when = pd.to_datetime(live["maturity_date"])
+    return live[when == when.min()]
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -54,13 +54,14 @@ def render_record_transaction_page():
         render_terms(security_terms(si))
 
     # Account and date outside the form so changes trigger immediate rerun
-    sel_c1, sel_c2, sel_c3 = st.columns(3, gap="small")
-    with sel_c1:
-        ttype = st.selectbox("Transaction Type", TRANSACTION_TYPES)
-    with sel_c2:
-        account = st.selectbox("Account", ACCOUNTS, key="rec_acct")
-    with sel_c3:
-        tdate = st.date_input("Date", max_value=date.today(), key="rec_date")
+    with st.container(key="filterbar-entry"):    # the controls that shape the form: one strip
+        sel_c1, sel_c2, sel_c3 = st.columns(3, gap="small")
+        with sel_c1:
+            ttype = st.selectbox("Transaction Type", TRANSACTION_TYPES)
+        with sel_c2:
+            account = st.selectbox("Account", ACCOUNTS, key="rec_acct")
+        with sel_c3:
+            tdate = st.date_input("Date", max_value=date.today(), key="rec_date")
 
     # For principal repayment, show live units context (reactive to account change)
     units_by_account = pd.Series(dtype='float64')
