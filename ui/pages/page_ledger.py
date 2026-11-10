@@ -131,45 +131,46 @@ def render_ledger_page() -> None:
     filtered = bool(acct != 'All' or typ != 'All' or search)
     led = ledger_page(acct, typ, search)
 
-    if led.empty:
-        render_empty_state("No transactions match", "No entry in the ledger matches these filters.",
-                           eyebrow="Ledger", action_label="Clear the search, or set Account and Type to All.")
-    else:
-        tf = st.session_state.get("tf_selected")
-        tf = tf if tf in WINDOWS else "6M"
-        view = led.copy()
-        view["trade_date"] = pd.to_datetime(view["trade_date"])
-        cut = window_cutoff(pd.Timestamp(date.today()), tf)
-        if cut is not None:
-            view = view[view["trade_date"] >= cut]
-        view["transaction_type"] = view["transaction_type"].map(_type_label)
-        view["notes"] = view["notes"].map(lambda s: s if isinstance(s, str) and s.strip() else "—")
-        view = view[[c for c, _h, _f in _COLS]].reset_index(drop=True)
+    tf = st.session_state.get("tf_selected")
+    tf = tf if tf in WINDOWS else "6M"
+    view = led.copy()
+    view["trade_date"] = pd.to_datetime(view["trade_date"])
+    cut = window_cutoff(pd.Timestamp(date.today()), tf)
+    if cut is not None:
+        view = view[view["trade_date"] >= cut]
+    view["transaction_type"] = view["transaction_type"].map(_type_label)
+    view["notes"] = view["notes"].map(lambda s: s if isinstance(s, str) and s.strip() else "—")
+    view = view[[c for c, _h, _f in _COLS]].reset_index(drop=True)
 
-        scope = [acct if acct != 'All' else "ALL ACCOUNTS"]
-        if typ != 'All':
-            scope.append(_type_label(typ).upper())
-        if search:
-            scope.append(f"“{search}”")
-        context = " · ".join(scope + [tf, (f"{len(view):,} of {len(led):,} transactions" if len(view) != len(led)
-                                           else _n(len(view), "transaction", "transactions"))])
-        if view.empty:
-            newest = pd.to_datetime(led["trade_date"]).max()
-            with panel("ledger", context=context, window=True):
+    scope = [acct if acct != 'All' else "ALL ACCOUNTS"]
+    if typ != 'All':
+        scope.append(_type_label(typ).upper())
+    if search:
+        scope.append(f"“{search}”")
+    context = " · ".join(scope + [tf, (f"{len(view):,} of {len(led):,} transactions" if len(view) != len(led)
+                                       else _n(len(view), "transaction", "transactions"))])
+    if view.empty:
+        # The panel (and its window control) stays put, so the window is never lost to a filter.
+        with panel("ledger", context=context, window=True):
+            if led.empty:
+                render_empty_state("No transactions match", "No entry in the ledger matches these filters.",
+                                   eyebrow="Ledger", action_label="Clear the search, or set Account and Type to All.")
+            else:
+                newest = pd.to_datetime(led["trade_date"]).max()
                 render_empty_state(
                     f"Nothing in the last {tf}",
                     f"The newest matching entry is dated {esc(f'{newest:%d %b %Y}')}.",
                     eyebrow="Ledger", action_label="Widen the window to ALL to see every entry.")
-        else:
-            render_table_panel(
-                view, "ledger", context=context, window=True,
-                max_rows=CAP, keep="first", max_height=560, label_col="trade_date",
-                col_labels={c: h for c, h, _f in _COLS},
-                col_format={c: f for c, _h, f in _COLS if f is not None},
-                sign_color_cols={"units"},
-                footer=(esc(f"Showing the newest {CAP:,} of {len(view):,} — the export has all of them.")
-                        if len(view) > CAP else ""),
-            )
+    else:
+        render_table_panel(
+            view, "ledger", context=context, window=True,
+            max_rows=CAP, keep="first", max_height=560, label_col="trade_date",
+            col_labels={c: h for c, h, _f in _COLS},
+            col_format={c: f for c, _h, f in _COLS if f is not None},
+            sign_color_cols={"units"},
+            footer=(esc(f"Showing the newest {CAP:,} of {len(view):,} — the export has all of them.")
+                    if len(view) > CAP else ""),
+        )
 
     xl = ledger_tab(acct)
     with st.container(key="ledger-exports", horizontal=True, gap="small"):

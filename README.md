@@ -7,10 +7,10 @@
 **Institutional-grade fixed income portfolio management**
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
-[![License](https://img.shields.io/badge/License-Proprietary-FFC300)](#license)
-[![Version](https://img.shields.io/badge/Version-2.4.0-FFC300)](#)
-[CHANGELOG](CHANGELOG.md) &nbsp;|&nbsp; Last Updated: 2026-07
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.52.2_(pinned)-2B5FD9?logo=streamlit&logoColor=white)](https://streamlit.io)
+[![License](https://img.shields.io/badge/License-Proprietary-2B5FD9)](#license)
+[![Version](https://img.shields.io/badge/Version-3.0.0-2B5FD9)](#)
+[CHANGELOG](CHANGELOG.md) &nbsp;|&nbsp; Last Updated: 2026-11
 
 
 *A Hemrek Capital Product*
@@ -21,100 +21,106 @@
 
 ## Overview
 
-Nivesa is a comprehensive bond portfolio management system built for tracking fixed income investments across multiple accounts. It provides institutional-grade analytics including duration calculations, cashflow projections, maturity profiling, and concentration risk monitoring — all within a sleek, dark-themed interface from the Hemrek Capital product family.
+Nivesa is a bond portfolio ledger for tracking fixed income investments across the family's
+accounts. It keeps one ledger of every bond and reads it as a book: what it cost, what it yields
+to cost, what it pays and when, and when the capital comes back — with duration, maturity
+profiling and issuer concentration.
+
+## What you see
+
+Nivesa wears the **Graphite** design system of the Tattva / Nishkarsh terminals, ported exactly:
+Paper (light, default) and Slate (dark) appearances, Inter for prose and JetBrains Mono for every
+number, colour that always carries a meaning (green income and gains, red losses, amber caution,
+cobalt the system's voice), flat hairline panels, and one component per job. Nothing is collapsed
+into a drop-down: messages and caveats appear in the notice rail under the command bar.
+
+**The shell, on every page:** a tape of the next projected coupon and principal payments → the
+command bar (the book, its cost, weighted yield to cost, duration, positions, as-of, and a chip:
+CURRENT, or how many bonds have matured without their redemption recorded) → the notice rail
+(form results, positions maturing within 30 days, matured-but-unredeemed bonds) → the page.
+**The rail:** Book (a read-only readout: securities, transactions, accounts, last entry, database,
+version) → Session (Refresh) → Appearance.
+
+| Section | Page | What it answers |
+|---|---|---|
+| — | **Overview** | What do we hold, and what does it earn? Cost, yield, coupon income, duration and composition; capital allocation by account; where the book sits by maturity. |
+| Analytics | **Positions** | What exactly do we hold? Every position, with export. |
+| | **Cashflows** | What comes in, and when? Future coupons and principal, month by month (the window looks forward), and every payment in the next twelve months. |
+| | **Maturity** | When does capital come back? The maturity ladder and every bond in it. |
+| | **Issuers** | Where is the book concentrated? Issuer weights (amber at 5% of cost, red at 10%) and issuer detail. |
+| Operations | **Record Transaction** | Buy, Sell, Interest Receipt, Principal Repayment. |
+| | **Ledger** | The audit trail, filtered and windowed, with CSV and Excel export. |
+| | **Securities** | The securities master, with export. |
+| | **Add Security** · **Edit Security** · **Edit Transaction** | Maintain the master and correct the ledger. |
+
+Account filters sit in a strip directly above the table or chart they filter.
 
 ## Features
 
-### Portfolio Intelligence
-- **10 dashboard metrics** — cost basis, face value, weighted yields, duration, P&L, accrued interest
-- **Yield analytics** — nominal yield, yield-to-cost (YTC) with IRR-based computation
-- **Duration engine** — Macaulay & modified duration per position and weighted portfolio-level
-- **Concentration risk** — issuer weight bars with traffic-light thresholds
+### Portfolio intelligence
+- **Yield analytics** — coupon, and yield to cost (IRR on the dirty price, nominal at the coupon frequency)
+- **Duration engine** — Macaulay and modified duration per position and cost-weighted for the book, amortization-aware
+- **Concentration risk** — issuer weights with caution / danger thresholds
 
-### Cashflow & Maturity
-- **Cashflow projections** — monthly stacked bar chart of future coupon + principal flows
-- **Maturity ladder** — positions bucketed across 7 time horizons (0-3M through 5Y+)
-- **Upcoming schedule** — next 12 months of cashflows in detail
-
-### Risk Analytics
-- **Credit quality distribution** — visual breakdown by rating (AAA → D)
-- **Yield vs Duration scatter** — bubble chart sized by position weight
-- **Multi-account tracking** — REKHA, HEMANG, MANTHAN, HIMA
+### Cashflow & maturity
+- **Cashflow projections** — monthly coupon and principal flows, amortizing bonds on their inferred cadence
+- **Maturity ladder** — positions bucketed across seven horizons, plus matured
+- **Nearterm schedule** — every payment in the next twelve months
 
 ### Operations
-- **Securities master** — full bond registry with type, rating, sector, day count
-- **Transaction ledger** — immutable audit trail with filterable views
-- **Principal repayment** — automatic face value adjustment
-- **CSV export** — positions and ledger data
+- **Securities master** — type, rating, sector, listing, day count
+- **Transaction ledger** — the audit trail with filterable views and export
+- **Principal repayment** — face value steps down once per bond and date, pro rata across accounts
 
-### Design
-- **Hemrek Capital Design System** — consistent with Swing portfolio tracker
-- **Dark theme** — `#0F0F0F` background, `#FFC300` gold accents
-- **Responsive** — works on desktop and tablet
-- **Inter font** — professional typography
-
-## Quick Start
-
-### Option 1: Local Python
+## Quick start
 
 ```bash
-# Clone the repository
-git clone https://github.com/hemrek-capital/nivesa.git
-cd nivesa
-
-# Create virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Run
-streamlit run nivesa.py
+streamlit run app.py
 ```
 
-The app will open at `http://localhost:8501`
+The app opens at `http://localhost:8501`. Streamlit is pinned to **exactly 1.52.2**: the design
+system styles Streamlit's internal page structure, measured on that version — develop and deploy on
+it.
 
-### Option 2: Docker
-
-```bash
-# Build and run
-docker compose up -d
-
-# Or build manually
-docker build -t nivesa .
-docker run -p 8501:8501 -v nivesa_data:/app/data nivesa
-```
-
-### Option 3: Streamlit Community Cloud
-
-1. Fork this repository
-2. Go to [share.streamlit.io](https://share.streamlit.io)
-3. Deploy from your fork, pointing to `nivesa.py`
-
-## Project Structure
+## Project structure
 
 ```
 nivesa/
-├── nivesa.py              # Main application (single-file architecture)
-├── requirements.txt       # Python dependencies
-├── Dockerfile             # Container build
-├── docker-compose.yml     # Orchestration
-├── .streamlit/
-│   └── config.toml        # Streamlit theme & server config
+├── app.py                 # Shell: appearance, rail, navigation, page shell, footer
+├── core/                  # The ledger — unchanged logic from 2.8.0
+│   ├── config.py          #   constants (accounts, frequencies, types, ratings, version)
+│   ├── db.py              #   SQLite layer, migrations, chronology and face-adjustment checks
+│   ├── bonds.py           #   accrued interest, duration, yield to cost, schedules
+│   ├── book.py            #   positions engine, ledger frame
+│   ├── formatting.py      #   ₹ formatting (Indian grouping), percentages
+│   └── views.py           #   the page aggregates and the shell's figures (pure)
+├── ui/                    # Graphite design system + one module per page
+│   ├── theme.css · theme.py · palette.py · components.py · notices.py · book.py
+│   └── pages/             #   page_overview … page_edit_transaction
+├── tests/                 # golden book, source identity, write paths, pages, app
 ├── data/
-│   ├── db/
-│   │   └── portfolio.db   # SQLite database (auto-created)
-│   └── logs/
-│       └── nivesa.log     # Application logs (auto-created)
-├── scripts/
-│   └── backup.sh          # Database backup script
-├── assets/                # Static assets (if needed)
-├── .gitignore
-├── LICENSE
-└── README.md
+│   ├── db/portfolio.db    # SQLite database (auto-created)
+│   └── logs/nivesa.log    # Application log (auto-created)
+├── requirements.txt
+└── .streamlit/config.toml # server settings + the Paper/Slate theme blocks
 ```
+
+## Testing
+
+```bash
+pip install pytest
+python -m pytest -q
+```
+
+The suite runs offline on temporary copies of `data/` and never touches the live database:
+- **Golden book** — every number the 2.8.0 app displayed, captured from the original code with
+  the date frozen, reproduced exactly by the refactored code (skips with a re-capture command if
+  the database changes).
+- **Source identity** — every function moved out of the original `app.py` is byte-identical.
+- **Write paths** — every form operation (and its rejections) run through the original 2.8.0 app
+  and the new one on separate copies of the database; the resulting tables must match row for row.
+- **Pages and app** — every page renders with no `nan`/`None` text and none of the retired widgets.
 
 ## Database Schema
 
@@ -164,20 +170,13 @@ Nivesa uses SQLite with three tables:
 
 ### Streamlit Config
 
-Theme and server settings are in `.streamlit/config.toml`. The gold-on-black theme matches the Hemrek Capital design system used across Swing and Nivesa.
+Server settings and the Paper / Slate theme blocks are in `.streamlit/config.toml`; the in-app appearance switch lives at the foot of the rail.
 
 ## Backup & Recovery
 
 ### Manual Backup
 ```bash
 cp data/db/portfolio.db data/db/portfolio_backup_$(date +%Y%m%d).db
-```
-
-### Automated Backup
-```bash
-chmod +x scripts/backup.sh
-# Add to crontab for daily backups:
-# 0 2 * * * /path/to/nivesa/scripts/backup.sh
 ```
 
 ## Migration from Nivesh v1
@@ -188,7 +187,7 @@ Nivesa v2 is fully backward-compatible with the original `portfolio.db`. On firs
 3. Auto-populates metadata rows for all existing securities (default: NCD, Unrated)
 4. No data loss — your existing transactions and securities are preserved
 
-Simply replace your old `nivesh.py` with `nivesa.py` and run.
+Run `streamlit run app.py` against your existing `portfolio.db`.
 
 ## Product Family
 
@@ -199,7 +198,7 @@ Nivesa is part of the **Hemrek Capital** product suite:
 | **Swing** (स्विंग) | ETF portfolio tracker with real-time analytics |
 | **Nivesa** (निवेसा) | Bond portfolio ledger with cashflow intelligence |
 
-All products share the same design system: dark theme, gold accents, Inter typography, premium card layouts.
+Nivesa shares the Graphite design system of the Tattva and Nishkarsh terminals: Paper and Slate appearances, Inter and JetBrains Mono, semantic colour, flat panels.
 
 ## License
 

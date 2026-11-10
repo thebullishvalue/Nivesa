@@ -5,13 +5,13 @@ fresh copy of ``data/``, both through Streamlit's AppTest — and the two databa
 for row, in every table, with the same outcome on screen.
 
   · Operations: add security · edit security · record Buy, Sell, Interest_Receipt, Principal_Repayment
-    (including the pro-rata repayment whose face step-down is claimed once, and the fat-finger price
-    confirmation) · edit transaction (a buy, a repayment re-priced in place and one moved to another
-    date) · delete transaction (a buy, a repayment that owns its face step-down) — and the rejections the
-    original makes: missing fields, a duplicate ISIN, a past maturity, an issue date after maturity, a
-    date after maturity, an unconfirmed off-par price, too few units, a repayment above outstanding face,
-    a type change, and the chronology check that rolls back a sale or a deletion that would leave an
-    account short.
+    (including the pro-rata repayment whose face step-down is claimed once, the fat-finger price
+    confirmation, and a buy of a security added in the same session) · edit transaction (a buy, a
+    repayment re-priced in place and one moved to another date) · delete transaction (a buy, a repayment
+    that owns its face step-down) — and the rejections the original makes: missing fields, a duplicate
+    ISIN, a past maturity, an issue date after maturity, a date before issue or after maturity, an
+    unconfirmed off-par price, too few units, a repayment above outstanding face, a type change, and the
+    chronology check that rolls back a sale or a deletion that would leave an account short.
   · The original is reached the way its user reached it — the sidebar "Navigation" selectbox; the new
     app by page switching (``_page_hash``), with the segmented-control shim ``tests/test_app.py`` uses.
   · The date is frozen to 2026-11-10 in both (the original's own ``date`` / ``datetime`` names; the 3.0
@@ -24,6 +24,10 @@ for row, in every table, with the same outcome on screen.
     (``st.error``; the rail's "Not saved" row) and the cautions (``st.warning``; the rail's "Check" row),
     markdown bold markers dropped — and a rejected step must leave the database untouched, an accepted
     one must change it.
+
+The same harness proves the Ledger page's two exports are the original's: the CSV byte for byte (the
+2.8.0 Transaction Ledger page's, same filters, same file name) and the Excel workbook cell for cell (the
+2.8.0 dashboard ledger tab's, same account, same file and sheet name).
 
 Scenarios are chosen from the book by query (never by name: the book is private), so the file names no
 holding. Nothing here touches the tracked ``data/``.
@@ -520,3 +524,82 @@ def test_write_path_matches_the_original(case, tmp_path, monkeypatch):
         assert n_db.keys() == o_db.keys(), (where, sorted(n_db.keys() ^ o_db.keys()))
         for t in o_db:
             assert n_db[t] == o_db[t], (where, f"table {t} differs from the original's")
+
+
+# ── the ledger's exports ─────────────────────────────────────────────────────
+def _capture_downloads(mp: pytest.MonkeyPatch) -> list:
+    """Every file a download button hands the browser, as ``(filename, mimetype, bytes)``."""
+    from streamlit.runtime.memory_media_file_storage import MemoryMediaFileStorage
+    files: list = []
+    real = MemoryMediaFileStorage.load_and_get_id
+
+    def load_and_get_id(self, path_or_data, mimetype, kind, filename=None):
+        if isinstance(path_or_data, bytes):
+            files.append((filename, mimetype, path_or_data))
+        return real(self, path_or_data, mimetype, kind, filename)
+
+    mp.setattr(MemoryMediaFileStorage, "load_and_get_id", load_and_get_id)
+    return files
+
+
+def _last(files: list, prefix: str):
+    hits = [f for f in files if (f[0] or "").startswith(prefix)]
+    assert hits, (prefix, [f[0] for f in files])
+    return hits[-1]
+
+
+def _xlsx_frame(data: bytes):
+    import io
+
+    import pandas as pd
+    xl = pd.ExcelFile(io.BytesIO(data), engine="openpyxl")
+    return xl.sheet_names, pd.read_excel(xl, sheet_name=None, dtype=object)
+
+
+#: (account, type) filter variants; the original's Excel lives on its dashboard ledger tab (account
+#: filter "led_acct"), its CSV on its Transaction Ledger page ("la", "lt"); the new page has both.
+_EXPORT_VARIANTS = [("All", "All"), ("HIMA", "All"), ("All", "Principal_Repayment"), ("MANTHAN", "Buy")]
+
+
+@pytest.mark.parametrize("acct,typ", _EXPORT_VARIANTS, ids=[f"{a}-{t}" for a, t in _EXPORT_VARIANTS])
+def test_ledger_exports_match_the_original(acct, typ, tmp_path, monkeypatch):
+    """The Ledger page offers the 2.8.0 exports unchanged: the CSV byte for byte (and file name) as the
+    Transaction Ledger page produced it under the same filters, the Excel workbook cell for cell (and
+    file name, sheet name) as the dashboard ledger tab produced it for the same account."""
+    got: dict = {}
+    for which in ("original", "new"):
+        data = tmp_path / which / "data"
+        shutil.copytree(_BASE, data)
+        with monkeypatch.context() as mp:
+            _freeze(mp, which, data)
+            files = _capture_downloads(mp)
+            drv = _Driver(which)
+            at = drv.at
+            if which == "original":
+                if acct != "All":            # the dashboard's ledger tab, filtered by account
+                    at.selectbox(key="led_acct").set_value(acct)
+                    files.clear()
+                    drv._run()
+                xlsx = _last(files, "nivesa_ledger_")
+                at.sidebar.selectbox(key="nav_main").set_value("Transaction Ledger")
+                drv._run()
+            else:
+                from streamlit.util import calc_md5
+                at._page_hash = calc_md5("ledger")
+                drv._run()
+            at.selectbox(key="la").set_value(acct)
+            at.selectbox(key="lt").set_value(typ)
+            files.clear()
+            drv._run()
+            if which == "new":
+                xlsx = _last(files, "nivesa_ledger_")
+            got[which] = (_last(files, "nivesa_ledger.csv"), xlsx)
+    (o_csv, o_xl), (n_csv, n_xl) = got["original"], got["new"]
+    assert n_csv == o_csv, "the CSV export differs from the original's"
+    assert (n_xl[0], n_xl[1]) == (o_xl[0], o_xl[1]), (n_xl[:2], o_xl[:2])
+    o_sheets, o_frames = _xlsx_frame(o_xl[2])
+    n_sheets, n_frames = _xlsx_frame(n_xl[2])
+    assert n_sheets == o_sheets
+    for name in o_sheets:
+        assert list(n_frames[name].columns) == list(o_frames[name].columns)
+        assert n_frames[name].astype(str).values.tolist() == o_frames[name].astype(str).values.tolist(), name

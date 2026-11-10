@@ -2,6 +2,45 @@
 
 All notable changes to Nivesa are documented here.
 
+## [3.0.0] — 2026-11 — *The Graphite design system*
+
+### Changed
+- **The whole UI/UX is the Graphite design system of Tattva 2.8.0** (as ported to Nishkarsh),
+  adapted to a bond ledger: Paper (light, default) and Slate (dark) appearances, Inter and
+  JetBrains Mono, semantic colour, flat hairline panels, one component per job. The old
+  dark-and-gold theme and every inline style are gone.
+- **Navigation** is `st.navigation` pages in the rail: Overview · Analytics (Positions, Cashflows,
+  Maturity, Issuers) · Operations (Record Transaction, Ledger, Securities, Add Security, Edit
+  Security, Edit Transaction). The dashboard's six in-page tabs and the navigation dropdown are
+  retired.
+- **One page shell everywhere**: a tape of the next projected cashflows, the command bar (book,
+  cost, weighted yield to cost, duration, positions, as-of, and a chip: CURRENT or n MATURED) and
+  the notice rail, which now carries every form result and caveat (no pop-up success / error
+  boxes).
+- **Filters sit with what they filter**: each page's account filter is a strip directly above its
+  panel; the Ledger's account / type / search filters likewise. The ledger page's "Record New
+  Transaction" expander is removed — recording has its own page.
+- **Code layout**: the single `app.py` is split into `core/` (the ledger's logic, moved unchanged)
+  and `ui/` (design system and one module per page).
+
+### Added
+- Cashflows: a forward window (3M / 6M / 1Y / 2Y / ALL) on the monthly chart.
+- Issuers: explicit concentration thresholds — caution at 5% of cost, danger at 10% (2.8.0's
+  README described traffic lights the code never had).
+- Securities: CSV export.
+- Tests (none existed): a golden book of every number 2.8.0 displayed (date frozen), source
+  identity of every moved function, and a write-path proof that every form operation leaves the
+  database exactly as 2.8.0 did.
+
+### Unchanged
+- Every number: positions, yields, duration, P&L, accrued interest, cashflows, maturity buckets,
+  allocation and concentration reproduce 2.8.0 exactly (golden test).
+- The database schema, migrations, validation and every write path (write-path test).
+
+### Dependencies
+- `streamlit==1.52.2` pinned exactly, with `starlette>=0.46,<1.0`: the design system styles
+  Streamlit's internal page structure, measured on this version.
+
 ## [2.8.0] — 2026-08
 
 ### Fixed
