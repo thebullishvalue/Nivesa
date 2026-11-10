@@ -28,10 +28,12 @@ NAV = [("", "Overview"), ("Analytics", "Positions"), ("Analytics", "Cashflows"),
 ICONS = [":material/dashboard:", ":material/table_rows:", ":material/payments:", ":material/event:",
          ":material/domain:", ":material/add_card:", ":material/receipt_long:", ":material/inventory_2:",
          ":material/library_add:", ":material/edit_note:", ":material/edit:"]
-FIRST_HEADER = {"overview": "Capital Allocation", "positions": "The Positions", "cashflows": "What Comes In, and When",
-                "maturity": "When Capital Comes Back", "issuers": "Where the Book Is Concentrated",
-                "record-transaction": "Record Transaction", "ledger": "The Audit Trail",
-                "securities": "The Securities Master", "add-security": "Add Security",
+FIRST_HEADER = {"overview": "Capital Allocation", "positions": "Positions — What Exactly Do We Hold?",
+                "cashflows": "Cashflows — What Comes In, and When?",
+                "maturity": "Maturity — When Does Capital Come Back?",
+                "issuers": "Issuers — Where Is the Book Concentrated?",
+                "record-transaction": "Record Transaction", "ledger": "The Ledger",
+                "securities": "Securities Master", "add-security": "Add Security",
                 "edit-security": "Edit Security", "edit-transaction": "Edit Transaction"}
 PICKERS = {"record-transaction": "Select Security", "edit-security": "Select Security",
            "edit-transaction": "Select Transaction"}

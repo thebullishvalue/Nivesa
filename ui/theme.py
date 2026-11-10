@@ -169,6 +169,8 @@ input::placeholder, textarea::placeholder { color: var(--ink-quaternary) !import
     border-color: var(--line-strong) !important;
 }
 .stSelectbox [data-baseweb="select"] svg { color: var(--ink-quaternary) !important; }
+/* The number input's well (theme.css §18) is the container: white, as every Paper input. */
+[data-testid="stMain"] [data-testid="stNumberInputContainer"] { background: var(--surface-1) !important; }
 /* The open menu is a portal at the document root — it inherits nothing from
    the app, so it needs the light surface named explicitly. Selectors match
    the RENDERED markup: the popover shell and a bare `ul` (the listbox role
