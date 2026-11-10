@@ -2,6 +2,13 @@
 
 All notable changes to Nivesa are documented here.
 
+## [3.0.1] — 2026-11 — *iPad: the page fills the screen when the rail is collapsed*
+
+### Fixed
+- On iPad in portrait (and any window 1024px wide or less), collapsing the sidebar slid it
+  off-screen but the page kept its 200px slot, leaving a blank strip. The narrow-rail width now
+  applies only while the rail is open.
+
 ## [3.0.0] — 2026-11 — *The Graphite design system*
 
 ### Changed
