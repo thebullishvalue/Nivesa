@@ -2760,3 +2760,97 @@
 [data-testid="stMain"] .stNumberInput [data-testid="stNumberInputContainer"] button:disabled {
     color: var(--ink-quaternary) !important; opacity: 0.5;
 }
+
+/* ── Native widgets painted from tokens, not Streamlit's theme ──────────── */
+/* The tab strip's overflow fade is Streamlit's own `.stTabs::after`, a gradient
+   into the NATIVE theme's background — near-black on Paper while the native
+   layer is dark. Painted from our page token in both appearances. */
+.stTabs::after { background-image: linear-gradient(to right, transparent, var(--bg)) !important; }
+
+/* ── Date input calendar (from Pragyam) ─────────────────────────────────── */
+/* The calendar, and why it takes a sledgehammer.
+
+   BaseWeb builds this widget from a JS theme object constructed at page load
+   from `.streamlit/config.toml` — NOT from CSS custom properties. That config
+   is static: it cannot follow the in-app appearance toggle, so on Paper the
+   whole overlay arrives painted for Slate and nothing the app injects reaches
+   it except CSS.
+
+   Naming the root and its first child is not enough, and the failure is
+   legible: the day grid went white while the month/year header, the weekday
+   row and the empty leading cells stayed black — those are painted by nodes
+   three and four levels down, each with its own background. Enumerating them
+   is a losing game against a library that reserves the right to renest.
+
+   So: paint the root, make every descendant transparent, then put back the
+   two states that genuinely carry a fill. Source order matters — the reset
+   must precede the states it is reinstating. */
+[data-baseweb="calendar"],
+[data-baseweb="popover"] [data-baseweb="calendar"] {
+    background: var(--surface-1) !important;
+    color: var(--ink) !important;
+    border-color: var(--line) !important;
+    box-shadow: var(--shadow-pop);
+}
+[data-baseweb="calendar"] * { background-color: transparent !important; }
+
+/* And the pseudo-elements, which `*` does NOT match — `*` selects elements,
+   and BaseWeb draws each day cell with two pseudos: `::before` is the
+   range-highlight band, `::after` is the day's own disc. That is precisely
+   the block that survived the reset above: a filled rectangle over the empty
+   leading and trailing cells of the month, glaring on Paper and merely dark
+   on Slate, because the band is painted from the same static base as
+   everything else in this widget.
+   Both are blanked rather than just the one that looks guilty — which of the
+   two paints the band is BaseWeb's implementation detail and has moved
+   between versions — and the selected day's disc is then reinstated
+   explicitly on both, from our own accent. That way the reset cannot cost the
+   one state this widget must show. */
+[data-baseweb="calendar"] *::before,
+[data-baseweb="calendar"] *::after { background-color: transparent !important; }
+[data-baseweb="calendar"] [aria-selected="true"]::after,
+[data-baseweb="calendar"] [aria-selected="true"] > div::after,
+[data-baseweb="calendar"] [aria-selected="true"]::before,
+[data-baseweb="calendar"] [aria-selected="true"] > div::before {
+    background-color: var(--accent) !important;
+}
+
+/* Days are gridcells, not buttons — a `button` rule alone leaves the grid
+   unstyled. Both are named, and the states come after the reset above. */
+[data-baseweb="calendar"] button,
+[data-baseweb="calendar"] [role="gridcell"],
+[data-baseweb="calendar"] [role="gridcell"] > div {
+    color: var(--ink-secondary) !important;
+}
+[data-baseweb="calendar"] button:hover,
+[data-baseweb="calendar"] [role="gridcell"]:hover > div {
+    background-color: var(--surface-2) !important;
+}
+[data-baseweb="calendar"] [aria-selected="true"],
+[data-baseweb="calendar"] [aria-selected="true"] > div,
+[data-baseweb="calendar"] [aria-selected="true"]:hover > div {
+    background-color: var(--accent) !important; color: #FFFFFF !important;
+}
+[data-baseweb="calendar"] [aria-disabled="true"],
+[data-baseweb="calendar"] [aria-disabled="true"] > div {
+    color: var(--ink-quaternary) !important;
+}
+/* Weekday header row, and the month/year selects in the calendar's own
+   header — selects inside a portal, which neither the page's select rules
+   nor the popover's reach. */
+[data-baseweb="calendar"] [role="columnheader"] {
+    color: var(--ink-quaternary) !important;
+    font-family: var(--mono); font-size: var(--fs-3xs);
+    text-transform: uppercase; letter-spacing: 0.1em;
+}
+[data-baseweb="calendar"] [data-baseweb="select"] > div {
+    background-color: var(--surface-2) !important;
+    border-color: var(--line) !important;
+}
+[data-baseweb="calendar"] [data-baseweb="select"] div,
+[data-baseweb="calendar"] [data-baseweb="select"] span,
+[data-baseweb="calendar"] [data-baseweb="select"] svg,
+[data-baseweb="calendar"] [data-baseweb="button"] svg {
+    color: var(--ink-secondary) !important;
+}
+
