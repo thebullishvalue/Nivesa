@@ -1,0 +1,14 @@
+# Python bytecode / tooling caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# SQLite sidecar files (WAL mode) — the database itself is tracked
+data/db/*.db-wal
+data/db/*.db-shm
+
+# Secrets / environments / OS noise
+.streamlit/secrets.toml
+.venv/
+venv/
+.DS_Store
