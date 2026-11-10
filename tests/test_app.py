@@ -123,7 +123,8 @@ def test_every_page_renders_under_the_shell(apptest):
     for label in ("Total Invested (Cost)", "Portfolio Yield (WA)", "Annual Coupon Income", "Weighted Duration",
                   "Positions"):
         assert f">{label}<" in md, label
-    assert "app-footer" in md and "Hemrek Capital" in md and "v3.0.0" in md and " IST" in md
+    from core.config import VERSION
+    assert "app-footer" in md and "Hemrek Capital" in md and f"v{VERSION}" in md and " IST" in md
 
 
 @pytest.mark.parametrize("url", list(PICKERS))

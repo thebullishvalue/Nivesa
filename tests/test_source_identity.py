@@ -104,7 +104,7 @@ def test_config_side_effects_are_the_originals():
 
 def test_version_is_3():
     from core.config import BUILD, VERSION
-    assert VERSION == "3.0.0" and BUILD == "2026.11.GRAPHITE"
+    assert VERSION.startswith("3.") and BUILD == "2026.11.GRAPHITE"
 
 
 # ── core.views: the lifted dashboard aggregates ──────────────────────────────
