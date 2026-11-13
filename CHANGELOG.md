@@ -2,6 +2,14 @@
 
 All notable changes to Nivesa are documented here.
 
+## [3.0.5] — 2026-11-13
+
+### Fixed
+- **The chosen day reads as one disc.** The previous fix filled the day's inner box while BaseWeb
+  still drew its own selection ring around it (a square inside a circle). The fill now goes on that
+  ring (the cell's `::after`) and the inner box stays clear: one accent disc with a white number,
+  in both appearances.
+
 ## [3.0.4] — 2026-11-13
 
 ### Fixed
