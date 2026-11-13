@@ -9,7 +9,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.52.2_(pinned)-2B5FD9?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![License](https://img.shields.io/badge/License-Proprietary-2B5FD9)](#license)
-[![Version](https://img.shields.io/badge/Version-3.0.3-2B5FD9)](#)
+[![Version](https://img.shields.io/badge/Version-3.0.4-2B5FD9)](#)
 [CHANGELOG](CHANGELOG.md) &nbsp;|&nbsp; Last Updated: 2026-11
 
 
