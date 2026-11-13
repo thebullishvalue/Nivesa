@@ -103,7 +103,7 @@ def _concentration_figure(ir):
         fig.add_vline(x=level, line=dict(color=chart_rgba(hue, 0.55), width=1, dash="dot"),
                       annotation_text=f"{level:.0%} {word}", annotation_position="top",
                       annotation_font=dict(size=9, family="JetBrains Mono, monospace", color=chart_color(hue)))
-    fig.update_layout(margin=dict(t=24, l=12, r=56, b=38))
+    fig.update_layout(margin=dict(t=24, l=20, r=64, b=38))
     return fig
 
 
