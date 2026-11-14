@@ -1002,7 +1002,7 @@ def render_data_table(
     label_col: str | None = None,
     col_labels: dict[str, str] | None = None,
     max_height: int = 520,
-    row_height: int = 27,
+    row_height: int = 30,
     col_format: "dict[str, object] | None" = None,
     keep: str = "last",
 ) -> None:
