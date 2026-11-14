@@ -99,9 +99,13 @@ def _concentration_figure(ir):
     top = max(weights) if weights else 0.0
     fig.update_xaxes(tickformat=".0%", range=[0, max(top * 1.16, CONCENTRATION_DANGER * 1.12)], showspikes=False)
     fig.update_yaxes(showgrid=False, zeroline=False, automargin=True, ticksuffix="  ")
-    for level, hue, word in ((CONCENTRATION_CAUTION, "amber", "caution"), (CONCENTRATION_DANGER, "rose", "danger")):
+    # Above the plot, each label leaning AWAY from the other line: centred over
+    # their lines, the two collided on a phone, where 5% and 10% sit ~40px apart.
+    for level, hue, word, side in ((CONCENTRATION_CAUTION, "amber", "caution", "right"),
+                                   (CONCENTRATION_DANGER, "rose", "danger", "left")):
         fig.add_vline(x=level, line=dict(color=chart_rgba(hue, 0.55), width=1, dash="dot"),
                       annotation_text=f"{level:.0%} {word}", annotation_position="top",
+                      annotation_xanchor=side,
                       annotation_font=dict(size=9, family="JetBrains Mono, monospace", color=chart_color(hue)))
     fig.update_layout(margin=dict(t=24, l=20, r=64, b=38))
     return fig
