@@ -251,6 +251,20 @@ def _render_pages() -> None:
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
+def _terminal() -> None:
+    """The terminal's masthead (once per process) and the ledger's own log in the run trace.
+
+    The ledger keeps its file log (``data/logs``) as before; the console shows the same events
+    in the family's form. The per-rerun "Database initialized" line stays in the file only.
+    """
+    from core.config import DB_FILE, TAGLINE
+    from core.logger_config import capture_library_output, console, route_logging
+    capture_library_output()
+    h = route_logging(console, names=(PRODUCT_NAME,))
+    h.addFilter(lambda r: "initialized / migrated" not in r.getMessage())
+    console.banner(PRODUCT_NAME, VERSION, TAGLINE, {"Maintainer": COMPANY, "Database": DB_FILE})
+
+
 def main() -> None:
     st.set_page_config(page_title="NIVESA | Bond Portfolio Ledger", page_icon=_FAVICON, layout="wide",
                        initial_sidebar_state="expanded")
@@ -258,6 +272,7 @@ def main() -> None:
     # tables and iframes agree on one value for the whole run.
     st.session_state["theme"] = "light" if theme_choice() == "Paper" else "dark"
     inject_css(theme=st.session_state["theme"])
+    _terminal()
     # Read by default_chart_context: a panel's context line reads "ALL ACCOUNTS · 6M · units".
     st.session_state["active_target"] = SCOPE
     st.session_state.pop("_notice_slot", None)      # a slot belongs to the run that made it

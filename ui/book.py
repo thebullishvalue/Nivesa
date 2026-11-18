@@ -34,7 +34,34 @@ def _signature() -> tuple:
 
 @st.cache_data(show_spinner=False, max_entries=4)
 def _positions(sig: tuple):  # noqa: ARG001 — the cache key
-    return get_positions_dataframe()
+    """The positions engine, run once per book state — and traced in the terminal when it runs."""
+    from core.config import VERSION
+    from core.logger_config import console
+    console.header("Nivesa · Book", VERSION)
+    console.main_header("Source", {"Database": os.path.basename(_db.DB_FILE), "As of": sig[0]})
+    try:
+        with console.task("Positions engine", "running average cost · accruals · yields") as t:
+            df, totals = get_positions_dataframe()
+            t.ok(f"{len(df)} positions" if len(df) else "empty book")
+    except Exception:
+        console.end_run("FAILED")
+        raise
+    if len(df):
+        from core.formatting import fmt_inr, fmt_inr_short, fmt_pct
+        console.summary("Book", {
+            "Positions": f"{totals['Num Positions']} · {totals['Num Issuers']} issuers · "
+                         f"{totals['Num Accounts']} accounts",
+            "Face value": f"{fmt_inr(totals['Total Face Value'])} ({fmt_inr_short(totals['Total Face Value'])})",
+            "Cost basis": fmt_inr(totals["Total Cost Basis"]),
+            "Annual coupon": fmt_inr(totals["Total Annual Coupon"]),
+            "Accrued interest": fmt_inr(totals["Total Accrued Interest"]),
+            "Nominal yield": fmt_pct(totals["Weighted Nominal Yield"]),
+            "Yield to cost": fmt_pct(totals["Weighted YTC"]),
+            "Modified duration": f"{totals['Weighted Mod Duration']:.2f} years",
+            "Avg maturity": f"{totals['Weighted Avg Maturity']:.2f} years",
+        })
+    console.end_run()
+    return df, totals
 
 
 @st.cache_data(show_spinner=False, max_entries=4)
