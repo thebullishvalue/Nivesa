@@ -21,7 +21,6 @@ import pandas as pd
 
 from core.bonds import calc_days_to_maturity, generate_amortizing_schedule
 from core.book import MATURITY_BUCKET_ORDER, _maturity_bucket, get_transaction_ledger_dataframe
-from core.config import ACCOUNTS, PRODUCT_NAME, VERSION
 from core.db import db_query
 from core.formatting import fmt_inr, fmt_inr_short, fmt_pct
 
@@ -30,7 +29,7 @@ __all__ = [
     "maturity_ladder", "maturity_rows", "cashflow_projection", "cashflow_totals", "nearterm_cashflows",
     "issuer_detail", "ledger_tab", "ledger_page", "securities_master", "account_options",
     "allocation_by_bucket", "matured_mask", "maturing_soon", "tape_items", "command_bar", "book_notices",
-    "rail_counts", "is_empty_book",
+    "is_empty_book",
     "FORWARD_WINDOW_MONTHS", "forward_window_end", "in_forward_window", "CONCENTRATION_CAUTION",
     "CONCENTRATION_DANGER", "concentration_tier", "top_issuers", "top_share", "next_maturities",
 ]
@@ -480,21 +479,3 @@ def book_notices(df) -> list[dict]:
                     f"{names}.",
         })
     return notices
-
-
-def rail_counts() -> list[tuple[str, str, str]]:
-    """The rail's Book readout rows: securities, transactions, accounts, last entry, database, version."""
-    secs = db_query("SELECT COUNT(*) AS c FROM securities")
-    txns = db_query("SELECT COUNT(*) AS c, MAX(trade_date) AS last FROM transactions")
-    n_sec = int(secs["c"].iloc[0]) if not secs.empty else 0
-    n_txn = int(txns["c"].iloc[0]) if not txns.empty else 0
-    last = txns["last"].iloc[0] if not txns.empty else None
-    last_s = pd.to_datetime(last).strftime("%d %b %Y") if last is not None and pd.notna(last) else "—"
-    return [
-        ("Securities", f"{n_sec:,}", ""),
-        ("Transactions", f"{n_txn:,}", ""),
-        ("Accounts", str(len(ACCOUNTS)), ""),
-        ("Last entry", last_s, ""),
-        ("Database", "SQLite (WAL)", ""),
-        ("Version", f"{PRODUCT_NAME} {VERSION}", "accent"),
-    ]

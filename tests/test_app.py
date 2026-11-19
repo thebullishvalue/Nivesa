@@ -101,10 +101,11 @@ def test_every_page_renders_under_the_shell(apptest):
     at = apptest()
     at.run()
     _assert_clean(at, "first run")
-    # the rail: Book readout · Session · Appearance, brand above the nav
+    # the rail holds controls only: Session · Appearance, brand above the nav, no readout
+    # (the book is on every page's command bar)
     rail = " ".join(m.value for m in at.sidebar.markdown if not m.value.lstrip().startswith("<style"))
-    assert "nav-brand" in rail and "NIV" in rail and "rail-readout" in rail
-    assert rail.index(">Book<") < rail.index(">Session<") < rail.index(">Appearance<")
+    assert "nav-brand" in rail and "NIV" in rail and "rail-readout" not in rail
+    assert rail.index(">Session<") < rail.index(">Appearance<")
     assert [b.label for b in at.sidebar.button] == ["Refresh"]
     for _section, title, _icon, url, _fn, windowed in app_module.PAGES:
         _goto(at, url)

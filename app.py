@@ -36,7 +36,7 @@ from core.config import (  # noqa: E402
 from core.db import db_init  # noqa: E402
 from ui import book  # noqa: E402
 from ui.components import (  # noqa: E402
-    WINDOWS, render_header, render_kpi_strip, render_nav_brand, render_rail_readout, render_section_header,
+    WINDOWS, render_header, render_kpi_strip, render_nav_brand, render_section_header,
     render_outcome_grid, render_system_grid, render_ticker, render_top_bar, render_warning_box,
 )
 from ui.notices import drain_notifications, open_rail  # noqa: E402
@@ -222,12 +222,10 @@ def _render_footer() -> None:
 
 # ─── The rail: Book readout · Session · Appearance ───────────────────────────
 def _render_rail(ctx: dict) -> None:
-    """A ledger has no instrument to pick and no model to read: the rail reads the book back,
-    offers one session action, and ends with the appearance switch."""
+    """A ledger has no instrument to pick and no model to read: the rail holds the pages, one
+    session action and the appearance switch (the book itself is on every page's command bar)."""
     with st.sidebar:
         render_nav_brand()
-        st.markdown('<div class="sidebar-title">Book</div>', unsafe_allow_html=True)
-        render_rail_readout(ctx["rail"])
         st.markdown('<div class="sidebar-title">Session</div>', unsafe_allow_html=True)
         if st.button("Refresh", type="secondary", width="stretch",
                      help="Re-read the ledger from the database and recompute the book (clears the cache)."):
