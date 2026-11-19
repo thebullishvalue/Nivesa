@@ -37,7 +37,7 @@ from core.db import db_init  # noqa: E402
 from ui import book  # noqa: E402
 from ui.components import (  # noqa: E402
     WINDOWS, render_header, render_kpi_strip, render_nav_brand, render_rail_readout, render_section_header,
-    render_ticker, render_top_bar, render_warning_box,
+    render_outcome_grid, render_system_grid, render_ticker, render_top_bar, render_warning_box,
 )
 from ui.notices import drain_notifications, open_rail  # noqa: E402
 from ui.pages.page_add_security import render_add_security_page  # noqa: E402
@@ -127,9 +127,46 @@ def _render_header() -> None:
     render_header(PRODUCT_NAME.upper(), TAGLINE)
 
 
+#: The landing page's three segments, as data: Engines, Inputs & Scope, What It Shows, in the
+#: order Arthagati reads them. Plain words first; a method's name only where it helps.
+_ENGINES = (
+    ("Positions", "The ledger · cost",
+     "Rebuilds every holding from its transactions (purchases, sales, coupons received and "
+     "principal repaid) in date order, so each account's position and average cost are always "
+     "what the ledger says, never a figure typed by hand.",
+     (("Built from", "Every recorded transaction"),
+      ("Cost", "Running average, per account"),
+      ("Checked", "Dates and balances, on entry"))),
+    ("Yield", "Return · duration",
+     "Works out each position's yield on its actual cash: what was paid, what has come in and "
+     "what is still due, so it sits beside the coupon. Duration measures how long, on average, "
+     "the money takes to come back.",
+     (("Yield", "On actual cashflows"),
+      ("Set beside", "The coupon rate"),
+      ("Duration", "Macaulay and modified"))),
+    ("Cashflows", "What comes back · when",
+     "Projects every coupon and principal payment still to come, month by month, including "
+     "bonds that repay in instalments, and lists the next twelve months line by line.",
+     (("Horizon", "Every future payment"),
+      ("Shown", "By month and by bond"),
+      ("Includes", "Partial repayments"))),
+)
+
+_SHOWS = (
+    ("The book", "What every account holds, at cost and at face value, with its yield and its "
+                 "coupon income."),
+    ("Yield and duration", "Each position's yield on its actual cashflows beside its coupon, and "
+                           "how long its money takes to come back."),
+    ("Cashflows", "Every coupon and repayment still to come, month by month, and the next twelve "
+                  "months line by line."),
+    ("The ledger", "Every buy, sale, receipt and repayment, checked against the bond's dates and "
+                   "each account's balance before it is saved."),
+)
+
+
 def _render_landing_page() -> None:
-    """Cold start — the product described with the product's own parts: the claim, then a KPI strip
-    and one outcome grid."""
+    """First run (an empty book): the claim, then Engines, Inputs & Scope and What It Shows —
+    Arthagati's three, the last named for a ledger, which has no run."""
     st.markdown(
         '<div class="lede">'
         '<div class="lede-claim">Nivesa keeps one ledger of every bond across the family\'s accounts, and '
@@ -139,36 +176,36 @@ def _render_landing_page() -> None:
         '</div>',
         unsafe_allow_html=True,
     )
-    render_section_header("Coverage", icon="layers")
+    render_section_header(
+        "Engines",
+        "Three engines read every bond in the ledger: what it cost, what it earns, and what it will "
+        "pay and when.",
+        icon="cpu",
+    )
+    render_system_grid(_ENGINES)
+    render_section_header(
+        "Inputs & Scope",
+        "The accounts, instruments and conventions the ledger is set up for.",
+        icon="database",
+    )
     render_kpi_strip(
         [
             {"label": "Accounts", "value": str(len(ACCOUNTS)),
              "subtext": " · ".join(a.title() for a in ACCOUNTS)},
             {"label": "Instrument Types", "value": str(len(BOND_TYPES)),
-             "subtext": "NCDs, corporate and government bonds, SDLs, T-bills, tax-free and gold bonds, FDs"},
+             "subtext": "NCDs, corporate and government bonds, state loans, T-bills, tax-free and "
+                        "gold bonds, and fixed deposits"},
             {"label": "Day-Count Conventions", "value": str(len(DAY_COUNT_CONVENTIONS)),
-             "subtext": " · ".join(DAY_COUNT_CONVENTIONS)},
+             "subtext": "How interest accrues between payment dates: " + " · ".join(DAY_COUNT_CONVENTIONS)},
         ],
         max_cols=3, key="landing-coverage",
     )
-    render_section_header("What it tracks", icon="target")
-    outcomes = (
-        ("Yield to cost", "Each position's money-weighted yield on its actual cashflows — purchases, "
-                          "receipts, repayments — nominal at its coupon frequency, so it sits beside the coupon."),
-        ("Duration", "Macaulay and modified duration of what is left to receive, on the same projected "
-                     "stream as the cashflows, amortization included."),
-        ("Cashflows", "Every coupon and principal payment still to come, month by month, and the next "
-                      "twelve months line by line."),
-        ("The ledger", "Every buy, sale, receipt and repayment, checked against the bond's dates and every "
-                       "account's running balance before it is saved."),
+    render_section_header(
+        "What It Shows",
+        "Four things the book shows once a security and its purchase are recorded.",
+        icon="target",
     )
-    st.markdown(
-        '<div class="outcome-grid">'
-        + "".join(f'<div class="outcome"><div class="o-t">{html.escape(t)}</div>'
-                  f'<div class="o-d">{html.escape(d)}</div></div>' for t, d in outcomes)
-        + "</div>",
-        unsafe_allow_html=True,
-    )
+    render_outcome_grid(_SHOWS)
 
 
 def _render_footer() -> None:
