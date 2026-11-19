@@ -2,6 +2,22 @@
 
 All notable changes to Nivesa are documented here.
 
+## [3.0.20] — 2026-11-19
+### Changed
+- **The landing page reads as Arthagati's.** Below the masthead and the claim, three segments in
+  one order: **Engines** (the three parts of the system, each a plain paragraph on what it does
+  and why it matters, then three short facts), **Inputs & Scope** (what it can be pointed at and
+  the history behind it) and **What It Shows** (the four things the book shows; a ledger has no
+  run). This is the first-run page, shown while the book is empty; it had two segments (Coverage,
+  What it tracks) and no word on the engines behind the book. Each section now opens with one
+  sentence saying what it holds.
+- **Plain words.** The copy says what each part does and why it matters, without the internal
+  shorthand it carried (money-weighted, nominal at its coupon frequency, projected stream). A
+  method's name stays only where it helps the reader.
+- **One height, one row.** The three panels are one grid, so they stand at one height with their
+  facts on one baseline; the four cards sit in one row, then two by two, then one per row on a
+  phone (they were laid out by an auto-fit grid that could strand the last card on a row).
+
 ## [3.0.19] — 2026-11-18
 ### Changed
 - **One console, shared by the family.** `core/logger_config.py` is now the family console, the same file
