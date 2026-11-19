@@ -71,7 +71,6 @@ def _shell(sig: tuple):  # noqa: ARG001 — the cache key
         "tape": views.tape_items(df),
         "bar": views.command_bar(df, totals),
         "notices": views.book_notices(df),
-        "rail": views.rail_counts(),
         "empty": views.is_empty_book(df),
     }
 
