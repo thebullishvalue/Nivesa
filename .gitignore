@@ -1,14 +1,37 @@
-# Python bytecode / tooling caches
+# ── Python ─────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
-.pytest_cache/
-
-# SQLite sidecar files (WAL mode) — the database itself is tracked
-data/db/*.db-wal
-data/db/*.db-shm
-
-# Secrets / environments / OS noise
-.streamlit/secrets.toml
+*.egg-info/
+.eggs/
+build/
+dist/
 .venv/
 venv/
+.env
+
+# ── Tooling caches ─────────────────────────────────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.cache/
+
+# ── Streamlit ──────────────────────────────────────────────────────────────────
+.streamlit/secrets.toml
+
+# ── Logs ───────────────────────────────────────────────────────────────────────
+*.log
+
+# ── Editors and operating systems ──────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
 .DS_Store
+Thumbs.db
+__MACOSX/
+
+# ── This repository ──────────────────────────────────────────────────────────────
+# SQLite sidecar files (WAL mode); the database itself is tracked
+data/db/*.db-wal
+data/db/*.db-shm
