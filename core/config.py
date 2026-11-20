@@ -10,11 +10,11 @@ VERSION / BUILD changed. ``NIVESA_DATA_DIR`` is read once, at import.
 import logging
 import os
 
-VERSION = "3.0.21"
+VERSION = "3.0.22"
 BUILD = "2026.11.GRAPHITE"
 PRODUCT_NAME = "Nivesa"
 PRODUCT_DEVANAGARI = "निवेसा"
-COMPANY = "Hemrek Capital"
+COMPANY = "@thebullishvalue"
 TAGLINE = "Institutional Fixed Income Management · Portfolio Analytics · Cashflow Intelligence"
 
 ACCOUNTS = ["REKHA", "HEMANG", "MANTHAN", "HIMA"]

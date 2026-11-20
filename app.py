@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-NIVESA (निवेसा) — Bond Portfolio Ledger | A Hemrek Capital Product
+NIVESA (निवेसा) — Bond Portfolio Ledger | Part of the Pragyam family by @thebullishvalue
 
 One ledger of every bond across the family's accounts, read as a book: what it costs, what it
 yields, what it pays and when it comes back.
 
 The business logic lives in ``core`` (moved byte-for-byte from the 2.8.0 single file and proven
 against it: ``tests/test_source_identity.py``, ``tests/test_golden.py``); this file is only the shell,
-in Tattva 2.8.0's grammar ("Graphite"): appearance first → the database → the rail (Book readout ·
-Session · Appearance) → the page shell on every page (tape → command bar → notice rail) →
+in Tattva 2.8.0's grammar ("Graphite"): appearance first → the database → the rail (Session ·
+Appearance) → the page shell on every page (tape → command bar → notice rail) →
 ``st.navigation`` pages → footer. With no live position the Overview is the cold start (masthead +
 landing); every Operations page stays reachable so the first security can be added.
 
@@ -220,7 +220,7 @@ def _render_footer() -> None:
     )
 
 
-# ─── The rail: Book readout · Session · Appearance ───────────────────────────
+# ─── The rail: Session · Appearance ──────────────────────────────────────────
 def _render_rail(ctx: dict) -> None:
     """A ledger has no instrument to pick and no model to read: the rail holds the pages, one
     session action and the appearance switch (the book itself is on every page's command bar)."""

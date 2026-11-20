@@ -42,7 +42,7 @@ RETIRED = {"load_css", "show_notifications", "rating_badge", "_render_metric", "
            "page_record_transaction", "page_edit_transaction", "page_view_transactions", "page_securities_master",
            "_render_footer", "main"}
 CONSTANTS = {
-    "core/config.py": ["PRODUCT_NAME", "PRODUCT_DEVANAGARI", "COMPANY", "TAGLINE", "ACCOUNTS", "FREQUENCIES",
+    "core/config.py": ["PRODUCT_NAME", "PRODUCT_DEVANAGARI", "TAGLINE", "ACCOUNTS", "FREQUENCIES",
                        "FREQ_MAP", "BOND_TYPES", "CREDIT_RATINGS", "DAY_COUNT_CONVENTIONS", "TRANSACTION_TYPES",
                        "FLOW_ORDER", "DATA_DIR", "LOG_DIR", "DB_DIR", "DB_FILE", "LOG_FILE", "logger"],
     "core/book.py": ["MATURITY_BUCKET_ORDER"],
@@ -100,6 +100,14 @@ def test_config_side_effects_are_the_originals():
             seg = ast.get_source_segment(ORIG_SRC, n)
             if seg.startswith(("os.makedirs", "logging.basicConfig")):
                 assert seg in src, seg
+
+
+def test_company_is_the_family_author():
+    """COMPANY is branding, not logic: 2.8.0 named Hemrek Capital; since 3.0.22 the footer and the
+    console banner name the family's author, as every other member does."""
+    from core.config import COMPANY
+    assert _assigns(ORIG_SRC, ORIG_TREE)["COMPANY"] == 'COMPANY = "Hemrek Capital"'
+    assert COMPANY == "@thebullishvalue"
 
 
 def test_version_is_3():
