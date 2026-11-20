@@ -125,7 +125,7 @@ def test_every_page_renders_under_the_shell(apptest):
                   "Positions"):
         assert f">{label}<" in md, label
     from core.config import VERSION
-    assert "app-footer" in md and "Hemrek Capital" in md and f"v{VERSION}" in md and " IST" in md
+    assert "app-footer" in md and "@thebullishvalue" in md and f"v{VERSION}" in md and " IST" in md
 
 
 @pytest.mark.parametrize("url", list(PICKERS))

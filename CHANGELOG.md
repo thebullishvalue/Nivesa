@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.0.22] — 2026-11-20
+### Changed
+- **The footer names the family's author.** It read "Hemrek Capital", a name carried from 2.8.0; it
+  now reads @thebullishvalue, as every other member's footer does, and so does the console banner's
+  maintainer line. `COMPANY` leaves the source-identity check (it is branding, not logic) and gains a
+  test of its own; the golden 2.8.0 source is unchanged.
+
+---
+
 ## [3.0.21] — 2026-11-19
 ### Changed
 - **The rail holds controls only.** The Book readout under the controls is gone (securities,
