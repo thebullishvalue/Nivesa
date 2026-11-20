@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.0.23] — 2026-11-20
+### Fixed
+- **A tooltip is one box, in the family's note type.** Every `help=` tip, the rail's refresh hint
+  among them, drew a box inside a box: the tooltip rule styled the tip and the wrapper Streamlit
+  nests in it alike, so it had two borders, two shadows and its padding twice. Its words kept
+  Streamlit's own markdown type (Source Sans, 14px), so a two-sentence hint stood 250px tall in a
+  narrow column. The wrapper is plain again and the words take the 10px mono note tier the rule
+  always asked for: the same hint is one box, about half as tall, with every line inside it.
+
+---
+
 ## [3.0.22] — 2026-11-20
 ### Changed
 - **The footer names the family's author.** It read "Hemrek Capital", a name carried from 2.8.0; it
