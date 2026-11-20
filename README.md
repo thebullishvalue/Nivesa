@@ -1,23 +1,17 @@
 <div align="center">
 
-# NIVESA (निवेसा)
+# NIVESA
 
-### Bond Portfolio Ledger
+**निवेसा**
 
-**Institutional-grade fixed income portfolio management**
+Bond Portfolio Ledger · Yield to Cost · Cashflows · Duration
 
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.52.2_(pinned)-2B5FD9?logo=streamlit&logoColor=white)](https://streamlit.io)
-[![License](https://img.shields.io/badge/License-Proprietary-2B5FD9)](#license)
-[![Version](https://img.shields.io/badge/Version-3.0.21-2B5FD9)](#)
-[CHANGELOG](CHANGELOG.md) &nbsp;|&nbsp; Last Updated: 2026-11
-
-
-*A Hemrek Capital Product*
-
----
+[![Version](https://img.shields.io/badge/version-3.0.21-2B5FD9)](CHANGELOG.md) [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](requirements.txt) [![Streamlit](https://img.shields.io/badge/streamlit-1.52.2-FF4B4B)](requirements.txt) [![License](https://img.shields.io/badge/license-proprietary-6B7280)](LICENSE) [![Pragyam Family](https://img.shields.io/badge/pragyam-family-0F1217)](#the-pragyam-family)
 
 </div>
+
+> Nivesa keeps one ledger of every bond across the family's accounts, and reads it as a book:
+> what it costs, what it yields, what it pays and when it comes back.
 
 ## Overview
 
@@ -26,36 +20,7 @@ accounts. It keeps one ledger of every bond and reads it as a book: what it cost
 to cost, what it pays and when, and when the capital comes back — with duration, maturity
 profiling and issuer concentration.
 
-## What you see
-
-Nivesa wears the **Graphite** design system of the Tattva / Nishkarsh terminals, ported exactly:
-Paper (light, default) and Slate (dark) appearances, Inter for prose and JetBrains Mono for every
-number, colour that always carries a meaning (green income and gains, red losses, amber caution,
-cobalt the system's voice), flat hairline panels, and one component per job. Nothing is collapsed
-into a drop-down: messages and caveats appear in the notice rail under the command bar.
-
-**The shell, on every page:** a tape of the next projected coupon and principal payments → the
-command bar (the book, its cost, weighted yield to cost, duration, positions, as-of, and a chip:
-CURRENT, or how many bonds have matured without their redemption recorded) → the notice rail
-(form results, positions maturing within 30 days, matured-but-unredeemed bonds) → the page.
-**The rail:** Book (a read-only readout: securities, transactions, accounts, last entry, database,
-version) → Session (Refresh) → Appearance.
-
-| Section | Page | What it answers |
-|---|---|---|
-| — | **Overview** | What do we hold, and what does it earn? Cost, yield, coupon income, duration and composition; capital allocation by account; where the book sits by maturity. |
-| Analytics | **Positions** | What exactly do we hold? Every position, with export. |
-| | **Cashflows** | What comes in, and when? Future coupons and principal, month by month (the window looks forward), and every payment in the next twelve months. |
-| | **Maturity** | When does capital come back? The maturity ladder and every bond in it. |
-| | **Issuers** | Where is the book concentrated? Issuer weights (amber at 5% of cost, red at 10%) and issuer detail. |
-| Operations | **Record Transaction** | Buy, Sell, Interest Receipt, Principal Repayment. |
-| | **Ledger** | The audit trail, filtered and windowed, with CSV and Excel export. |
-| | **Securities** | The securities master, with export. |
-| | **Add Security** · **Edit Security** · **Edit Transaction** | Maintain the master and correct the ledger. |
-
-Account filters sit in a strip directly above the table or chart they filter.
-
-## Features
+## What It Does
 
 ### Portfolio intelligence
 - **Yield analytics** — coupon, and yield to cost (IRR on the dirty price, nominal at the coupon frequency)
@@ -72,7 +37,7 @@ Account filters sit in a strip directly above the table or chart they filter.
 - **Transaction ledger** — the audit trail with filterable views and export
 - **Principal repayment** — face value steps down once per bond and date, pro rata across accounts
 
-## Quick start
+## Quick Start
 
 ```bash
 pip install -r requirements.txt
@@ -83,7 +48,26 @@ The app opens at `http://localhost:8501`. Streamlit is pinned to **exactly 1.52.
 system styles Streamlit's internal page structure, measured on that version — develop and deploy on
 it.
 
-## Project structure
+The app opens on an empty book: add a security under **Operations**, then record its purchase.
+Set `NIVESA_DATA_DIR` to keep the database somewhere other than `data/`.
+
+## Testing
+
+```bash
+pip install pytest
+python -m pytest -q
+```
+
+The suite runs offline on temporary copies of `data/` and never touches the live database:
+- **Golden book** — every number the 2.8.0 app displayed, captured from the original code with
+  the date frozen, reproduced exactly by the refactored code (skips with a re-capture command if
+  the database changes).
+- **Source identity** — every function moved out of the original `app.py` is byte-identical.
+- **Write paths** — every form operation (and its rejections) run through the original 2.8.0 app
+  and the new one on separate copies of the database; the resulting tables must match row for row.
+- **Pages and app** — every page renders with no `nan`/`None` text and none of the retired widgets.
+
+## Project Structure
 
 ```
 nivesa/
@@ -106,114 +90,42 @@ nivesa/
 └── .streamlit/config.toml # server settings + the Paper/Slate theme blocks
 ```
 
-## Testing
+## Documentation
 
-```bash
-pip install pytest
-python -m pytest -q
-```
+| Document | What it covers |
+|---|---|
+| [Guide](docs/GUIDE.md) | Each page, the database schema, configuration, backup, and migrating from Nivesh v1 |
+| [Changelog](CHANGELOG.md) | Every release, newest first |
 
-The suite runs offline on temporary copies of `data/` and never touches the live database:
-- **Golden book** — every number the 2.8.0 app displayed, captured from the original code with
-  the date frozen, reproduced exactly by the refactored code (skips with a re-capture command if
-  the database changes).
-- **Source identity** — every function moved out of the original `app.py` is byte-identical.
-- **Write paths** — every form operation (and its rejections) run through the original 2.8.0 app
-  and the new one on separate copies of the database; the resulting tables must match row for row.
-- **Pages and app** — every page renders with no `nan`/`None` text and none of the retired widgets.
+## The Pragyam Family
 
-## Database Schema
+Nine Streamlit applications built on one design system and one set of components, so a
+panel, a table, a chart or a number reads the same in each.
 
-Nivesa uses SQLite with three tables:
-
-### `securities` — Bond Master
-| Column | Type | Description |
-|--------|------|-------------|
-| bond_id | TEXT PK | UUID |
-| issuer | TEXT | Issuer name |
-| isin | TEXT UNIQUE | ISIN code |
-| maturity_date | TEXT | ISO date |
-| frequency | TEXT | Monthly/Quarterly/Semi-Annual/Annual |
-| coupon_rate | REAL | Decimal (0.10 = 10%) |
-| face_value | REAL | Per unit |
-
-### `transactions` — Immutable Ledger
-| Column | Type | Description |
-|--------|------|-------------|
-| transaction_id | TEXT PK | UUID |
-| bond_id | TEXT FK | References securities |
-| account | TEXT | Account name |
-| trade_date | TEXT | ISO date |
-| transaction_type | TEXT | Buy/Sell/Interest_Receipt/Principal_Repayment |
-| units | REAL | Positive=buy, negative=sell |
-| price | REAL | Per unit |
-| amount | REAL | Total cash amount |
-| notes | TEXT | Optional |
-
-### `security_metadata` — Extended Attributes
-| Column | Type | Description |
-|--------|------|-------------|
-| bond_id | TEXT PK/FK | References securities |
-| bond_type | TEXT | NCD/Corporate/Government/SDL/etc. |
-| credit_rating | TEXT | AAA through D, or Unrated |
-| day_count | TEXT | 30/360, Actual/365, etc. |
-| sector | TEXT | Financials, Infrastructure, etc. |
-| listing | TEXT | Unlisted/NSE/BSE/Both |
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NIVESA_DATA_DIR` | `data` | Base directory for database and logs |
-
-### Streamlit Config
-
-Server settings and the Paper / Slate theme blocks are in `.streamlit/config.toml`; the in-app appearance switch lives at the foot of the rail.
-
-## Backup & Recovery
-
-### Manual Backup
-```bash
-cp data/db/portfolio.db data/db/portfolio_backup_$(date +%Y%m%d).db
-```
-
-## Migration from Nivesh v1
-
-Nivesa v2 is fully backward-compatible with the original `portfolio.db`. On first run, it:
-1. Detects existing `securities` and `transactions` tables
-2. Creates the new `security_metadata` table
-3. Auto-populates metadata rows for all existing securities (default: NCD, Unrated)
-4. No data loss — your existing transactions and securities are preserved
-
-Run `streamlit run app.py` against your existing `portfolio.db`.
-
-## Product Family
-
-Nivesa is part of the **Hemrek Capital** product suite:
-
-| Product | Purpose |
-|---------|---------|
-| **Swing** (स्विंग) | ETF portfolio tracker with real-time analytics |
-| **Nivesa** (निवेसा) | Bond portfolio ledger with cashflow intelligence |
-
-Nivesa shares the Graphite design system of the Tattva and Nishkarsh terminals: Paper and Slate appearances, Inter and JetBrains Mono, semantic colour, flat panels.
+| Product | What it is |
+|---|---|
+| [**Tattva**](https://github.com/thebullishvalue/Tattva) | Cross-asset fair value, with a call only where its own record supports one |
+| [**Nishkarsh**](https://github.com/thebullishvalue/Nishkarsh) | Nifty 50 inference: a top-down forecast and bottom-up breadth, read as one |
+| [**Arthagati**](https://github.com/thebullishvalue/Arthagati) | Valuation-anchored market sentiment, tested on data it never saw |
+| [**Pragyam**](https://github.com/thebullishvalue/Pragyam) | Portfolio curation that spreads risk rather than predicting returns |
+| [**Sanket**](https://github.com/thebullishvalue/Sanket) | A market signal screener: what fired, what is about to, and whether it has paid |
+| [**Vaaydo**](https://github.com/thebullishvalue/Vaaydo) | An F&O trade screener on option positioning, with futures tickets |
+| **Nivesa** · *this repository* | A bond portfolio ledger: cost, yield, duration and cashflows across accounts |
+| [**Samhita**](https://github.com/thebullishvalue/Samhita) | A portfolio tracker: live prices, performance and risk against the benchmark |
+| [**Swing**](https://github.com/thebullishvalue/Swing) | A portfolio tracker for the swing book, on the same engine as Samhita |
 
 ## License
 
-Copyright © 2025 Hemrek Capital. All rights reserved.
+Proprietary. © 2025–2026 @thebullishvalue. All rights reserved. The source is visible here
+for reference only: viewing it grants no right to use, copy, modify or distribute it.
+See [LICENSE](LICENSE).
 
-This software is proprietary. Unauthorized copying, modification, distribution, or use of this software is strictly prohibited without written permission from Hemrek Capital.
+## Disclaimer
 
-## Support
-
-For issues, feature requests, or support:
-- Open an issue on GitHub
-- Contact the development team
+Nivesa is a research and decision-support tool, not investment advice. Nothing it shows is
+a recommendation to buy or sell any security, and past or measured results do not guarantee
+future ones. Every decision made with it is your own.
 
 ---
 
-<div align="center">
-<sub>Built with ☕ by Hemrek Capital</sub>
-</div>
+<div align="center"><sub>© 2025–2026 @thebullishvalue · Part of the Pragyam product family</sub></div>
