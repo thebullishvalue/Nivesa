@@ -464,7 +464,7 @@ def window_cutoff(last, tf: str | None):
     return pd.Timestamp(last) - pd.DateOffset(months=_WINDOW_MONTHS[tf])
 
 
-def render_window_control(key: str = "window") -> None:   # noqa: ARG001
+def render_window_control(key: str = "window") -> None:
     """The chart-window selector, rendered inside a panel header.
 
     It used to sit in a toolbar strip docked under the command bar — page
@@ -479,11 +479,28 @@ def render_window_control(key: str = "window") -> None:   # noqa: ARG001
     options = list(WINDOWS)
     if st.session_state.get("tf_selected") not in options:
         st.session_state["tf_selected"] = "6M"
-    st.segmented_control(
-        "Window", options, key="tf_selected", label_visibility="collapsed",
+    # The choice lives in a plain session key (tf_selected); each panel's control only shows it.
+    # As the widget's own key, the choice was dropped on any page that does not draw the control
+    # (Streamlit deletes the state of a widget a run does not reach, and keys a widget by page),
+    # so a window picked on one page came back as the default after a visit to another. Each
+    # panel's control now has its own key, starts from the choice and writes it back, and the
+    # chosen segment cannot be clicked off.
+    choice = st.session_state["tf_selected"]
+    wkey = f"tf_{key}"
+
+    def _sync() -> None:
+        picked = st.session_state.get(wkey)
+        if picked is not None:
+            st.session_state["tf_selected"] = picked
+
+    picked = st.segmented_control(
+        "Window", options, key=wkey, default=choice, label_visibility="collapsed", on_change=_sync,
         help="Window. Applies to every chart and table on this page; the cards "
              "and totals above count the whole book.",
     )
+    if picked != choice:            # the chosen segment clicked off, or a stale state: show the choice
+        del st.session_state[wkey]
+        st.rerun()
 
 
 def render_table_panel(
