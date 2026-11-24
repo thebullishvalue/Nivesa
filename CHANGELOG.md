@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.3.1] — 2026-11-24
+### Fixed
+- **Yield to cost on bonds that repay in instalments.** The projected coupon on a date that also carried a
+  principal repayment was struck on the balance AFTER the repayment, dropping a month's interest on every
+  instalment (from 2.8.0). Interest accrues on the balance outstanding over the period, so the repayment
+  now reduces only the coupons after it. Varthana's yield to cost on projected coupons was 11.02% against
+  11.60% on the interest it actually paid; it is now 11.54%. The golden values are re-captured from the
+  2.8.0 code with this one line corrected (`capture_golden.FIXES`): only the sample amortizer moves
+  (10.94% → 11.01% for an 11% bond bought at par).
+
+---
+
 ## [3.3.0] — 2026-11-24
 ### Added
 - **Redemption schedules.** Many of the book's NCDs repay principal in instalments; the ledger knew only

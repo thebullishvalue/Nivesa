@@ -163,8 +163,20 @@ _INSERTS = (
 )
 
 
+#: Fixes made since 2.8.0 that change its numbers, applied to the original before capture so the golden
+#: values are "2.8.0 plus these fixes" (each one is in the CHANGELOG and tested on its own):
+FIXES = (
+    # 3.3.1: a repayment on a coupon date does not reduce that coupon (core.bonds.calc_position_yield_to_cost)
+    ("            bal = original_face - sum(a for rd, a in reps if rd <= d)\n",
+     "            bal = original_face - sum(a for rd, a in reps if rd < d)\n"),
+)
+
+
 def instrumented_source() -> str:
     src = ORIGINAL.read_text(encoding="utf-8")
+    for old, new in FIXES:
+        assert src.count(old) == 1, f"fix anchor not unique: {old[:60]!r}"
+        src = src.replace(old, new)
     for anchor, line, where in _INSERTS:
         assert src.count(anchor) == 1, f"anchor not unique: {anchor[:60]!r}"
         src = src.replace(anchor, anchor + line if where == "after" else line + anchor)

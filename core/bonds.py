@@ -340,9 +340,13 @@ def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
                 take = min(fa, left)
                 fut.append((fd, take))
                 left -= take
+        # A coupon accrues on the balance outstanding over its period, so a repayment made ON a coupon
+        # date does not reduce that coupon (3.3.1: 2.8.0 subtracted it first, `rd <= d`, which dropped a
+        # month of interest on every instalment and understated YTC on amortizers — Varthana 11.02% on
+        # projected coupons against 11.60% on the interest actually paid; 11.54% with this fix).
         cds = _coupon_grid(mat, months, cutoff)
         for d in sorted(cds):
-            bal = original_face - sum(a for rd, a in reps if rd <= d) - sum(a for fd, a in fut if fd < d)
+            bal = original_face - sum(a for rd, a in reps if rd < d) - sum(a for fd, a in fut if fd < d)
             if bal > 0:
                 cfs.append((d, bal * coupon_rate / freq))
         cfs.extend(fut)
