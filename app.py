@@ -35,7 +35,7 @@ from core.config import (  # noqa: E402
 )
 from core.audit import audit_init  # noqa: E402
 from core.db import db_init  # noqa: E402
-from ui import book  # noqa: E402
+from ui import book, storage  # noqa: E402
 from ui.components import (  # noqa: E402
     WINDOWS, render_header, render_kpi_strip, render_nav_brand, render_section_header,
     render_outcome_grid, render_system_grid, render_ticker, render_top_bar, render_warning_box,
@@ -259,7 +259,7 @@ def _top_bar(ctx: dict, *, windowed: bool = False) -> None:
     audit = [] if _AUDIT_OK else [{"kind": "danger", "title": "Audit off",
                                    "body": "The audit trail could not be switched on; changes are not being "
                                            "recorded. See the log."}]
-    open_rail(drain_notifications() + audit + open_notice() + list(ctx["notices"]))
+    open_rail(drain_notifications() + storage.notices() + audit + open_notice() + list(ctx["notices"]))
 
 
 def _safe_render(name: str, fn) -> None:
@@ -321,15 +321,24 @@ def main() -> None:
     _terminal()
     if not require_login():
         return
-    # Read by default_chart_context: a panel's context line reads "ALL ACCOUNTS · 6M · units".
-    st.session_state["active_target"] = SCOPE
-    st.session_state.pop("_notice_slot", None)      # a slot belongs to the run that made it
-    db_init()
-    global _AUDIT_OK
-    _AUDIT_OK = audit_init()
-    ctx = book.shell_context()
-    _render_rail(ctx)
-    _render_pages()
+    # The book's home is the private store when one is set up (ui.storage): load it before the database
+    # is opened, and never open a stale or empty copy when it cannot be loaded.
+    if not storage.load_book():
+        return
+    try:
+        # Read by default_chart_context: a panel's context line reads "ALL ACCOUNTS · 6M · units".
+        st.session_state["active_target"] = SCOPE
+        st.session_state.pop("_notice_slot", None)      # a slot belongs to the run that made it
+        db_init()
+        global _AUDIT_OK
+        _AUDIT_OK = audit_init()
+        ctx = book.shell_context()
+        _render_rail(ctx)
+        _render_pages()
+    finally:
+        # Every write path ends its run with st.rerun() (or st.stop() on a rejection): both pass through
+        # here, so a saved change reaches the store before the next run draws its result.
+        storage.save_book()
 
 
 if __name__ == "__main__":

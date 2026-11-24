@@ -1,8 +1,8 @@
 """
 Capture the golden book from the ORIGINAL Nivesa 2.8.0 code (``app_2_8_0.py`` = ``app.py`` at commit
-8090864), with the date frozen, against a throwaway copy of ``data/``.
+8090864), with the date frozen, against a fresh build of the sample book.
 
-Run by hand only (never by pytest) when the book itself changes:
+Run by hand only (never by pytest) when the sample book (tests/fixture_book.py) changes:
 
     python tests/golden/capture_golden.py            # writes tests/golden/book_2026-11-10.json
 
@@ -290,7 +290,9 @@ def capture(data_dir: str) -> dict:
 def main() -> None:
     tmp = tempfile.mkdtemp(prefix="nivesa-golden-")
     data_dir = os.path.join(tmp, "data")
-    shutil.copytree(REPO / "data", data_dir)
+    sys.path.insert(0, str(REPO / "tests"))
+    import fixture_book
+    fixture_book.build(data_dir)
     try:
         out = capture(data_dir)
     finally:

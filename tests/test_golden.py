@@ -3,7 +3,7 @@ The golden book: every number Nivesa 2.8.0 displayed, captured from the ORIGINAL
 (``tests/golden/capture_golden.py`` over ``tests/golden/app_2_8_0.py``, date frozen to 2026-11-10),
 reproduced by the refactored ``core`` package to a float tolerance of 1e-9.
 
-Runs offline against a fresh copy of ``data/`` (never the tracked file). If the book itself has changed
+Runs offline against a fresh build of the invented sample book (``tests/fixture_book.py``). If the book itself has changed
 since the capture (new transactions), the fingerprint differs and the module is skipped with the command
 that re-captures it — a changed book is not a regression.
 """
@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+
+import fixture_book
 
 from capture_golden import (AS_OF, OUT, FrozenDate, FrozenDatetime, book_fingerprint, frame_records,
                             jsonable)
@@ -45,7 +47,7 @@ def assert_records(actual: list[dict], expected: list[dict], path: str) -> None:
 def book(tmp_path_factory):
     """A fresh copy of the book, the date frozen in every core module, the positions computed once."""
     data = tmp_path_factory.mktemp("golden") / "data"
-    shutil.copytree(REPO / "data", data)
+    fixture_book.build(data)
     db = data / "db" / "portfolio.db"
     if book_fingerprint(str(db)) != GOLDEN["meta"]["fingerprint"]:
         pytest.skip("the book changed since the golden capture — re-capture with "

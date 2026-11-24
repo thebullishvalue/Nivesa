@@ -492,7 +492,9 @@ def _known_ids(db: str) -> set:
 
 # ── the matrix ───────────────────────────────────────────────────────────────
 _BASE = Path(tempfile.mkdtemp(prefix="nivesa-writepaths-")) / "data"
-shutil.copytree(REPO / "data", _BASE)
+import fixture_book  # noqa: E402
+
+fixture_book.build(_BASE)
 atexit.register(shutil.rmtree, _BASE.parent, True)
 _BASE_DB = str(_BASE / "db" / "portfolio.db")
 assert Path(_BASE).resolve() != (REPO / "data").resolve()

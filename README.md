@@ -6,7 +6,7 @@
 
 Bond Portfolio Ledger · Yield to Cost · Cashflows · Duration
 
-[![Version](https://img.shields.io/badge/version-3.1.0-2B5FD9)](CHANGELOG.md) [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](requirements.txt) [![Streamlit](https://img.shields.io/badge/streamlit-1.52.2-FF4B4B)](requirements.txt) [![License](https://img.shields.io/badge/license-proprietary-6B7280)](LICENSE) [![Pragyam Family](https://img.shields.io/badge/pragyam-family-0F1217)](#the-pragyam-family)
+[![Version](https://img.shields.io/badge/version-3.2.0-2B5FD9)](CHANGELOG.md) [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](requirements.txt) [![Streamlit](https://img.shields.io/badge/streamlit-1.52.2-FF4B4B)](requirements.txt) [![License](https://img.shields.io/badge/license-proprietary-6B7280)](LICENSE) [![Pragyam Family](https://img.shields.io/badge/pragyam-family-0F1217)](#the-pragyam-family)
 
 </div>
 
@@ -51,17 +51,41 @@ system styles Streamlit's internal page structure, measured on that version — 
 it.
 
 The app opens on an empty book: add a security under **Operations**, then record its purchase.
-Set `NIVESA_DATA_DIR` to keep the database somewhere other than `data/`.
+Locally the ledger is `data/db/portfolio.db` (git-ignored); set `NIVESA_DATA_DIR` to keep it elsewhere.
 
-**Anywhere other people can reach the app, set a password** — in `.streamlit/secrets.toml` (never
-committed) or the host's secrets panel:
+## Keeping the ledger
+
+The ledger is never committed to this repository. Streamlit Community Cloud keeps no files (every
+redeploy and every wake from sleep starts on a fresh disk), so a hosted Nivesa keeps its ledger in a
+**private GitHub repository**: it loads `portfolio.db` from there when it starts and commits it back
+after every change. Each save is a commit, so that repository's history is a backup of every state the
+ledger has been in.
+
+1. Create a **private** repository (e.g. `nivesa-data`) and upload `portfolio.db` to its root.
+2. Create a [fine-grained token](https://github.com/settings/personal-access-tokens/new): *Only select
+   repositories* → that repository; *Repository permissions* → **Contents: Read and write**. Nothing else.
+3. In the app's **Settings → Secrets** on Streamlit Cloud (or `.streamlit/secrets.toml` locally):
 
 ```toml
+[storage]
+github_repo  = "your-name/nivesa-data"
+github_token = "github_pat_…"
+# path   = "portfolio.db"   # optional
+# branch = "main"           # optional
+
 [auth]
 password = "a long passphrase"
 ```
 
-or as the environment variable `NIVESA_PASSWORD`. Without one, every page and form is open.
+4. Reboot the app. If the stored file is ever changed outside the app, the app refuses to overwrite it
+   and says so; reboot to load the stored copy. To restore an older state, revert the file in that
+   repository's history and reboot.
+
+Without `[storage]` the app uses the local file, which is right on your own computer; on Streamlit
+Cloud it warns that edits will not survive a restart.
+
+**Anywhere other people can reach the app, set a password** (`[auth]` above, or the environment
+variable `NIVESA_PASSWORD`). Without one, every page and form is open.
 
 ## Testing
 
@@ -70,13 +94,13 @@ pip install pytest
 python -m pytest -q
 ```
 
-The suite runs offline on temporary copies of `data/` and never touches the live database:
+The suite runs offline on an invented sample book (`tests/fixture_book.py`) and never touches a real one:
 - **Bond maths** — day counts, coupon grid, yield to cost, XIRR, duration and accrued interest against
   textbook answers, independent of the book.
 - **Audit and sign-in** — every change is recorded, the trail is append-only, the password gates the app.
-- **Golden book** — every number the 2.8.0 app displayed, captured from the original code with
-  the date frozen, reproduced exactly by the refactored code (skips with a re-capture command if
-  the database changes).
+- **Store** — load, save, conflict and outage handling against a fake GitHub contents API.
+- **Golden book** — every number the 2.8.0 app displayed on the sample book, captured from the
+  original code with the date frozen, reproduced exactly by the current code.
 - **Source identity** — every function moved out of the original `app.py` is byte-identical.
 - **Write paths** — every form operation (and its rejections) run through the original 2.8.0 app
   and the new one on separate copies of the database; the resulting tables must match row for row.
@@ -91,16 +115,17 @@ nivesa/
 │   ├── config.py          #   constants (accounts, frequencies, types, ratings, version)
 │   ├── db.py              #   SQLite layer, migrations, chronology and face-adjustment checks
 │   ├── audit.py           #   the append-only audit trail (SQLite triggers)
+│   ├── store.py           #   the ledger's home: a private GitHub repository
 │   ├── bonds.py           #   accrued interest, duration, yield to cost, schedules
 │   ├── book.py            #   positions engine, ledger frame
 │   ├── formatting.py      #   ₹ formatting (Indian grouping), percentages
 │   └── views.py           #   the page aggregates and the shell's figures (pure)
 ├── ui/                    # Graphite design system + one module per page
-│   ├── theme.css · theme.py · palette.py · components.py · notices.py · book.py · auth.py
+│   ├── theme.css · theme.py · palette.py · components.py · notices.py · book.py · auth.py · storage.py
 │   └── pages/             #   page_overview … page_edit_transaction
 ├── tests/                 # bond maths, audit, golden book, source identity, write paths, pages, app
-├── data/
-│   ├── db/portfolio.db    # SQLite database (auto-created)
+├── data/                  # local working copy, git-ignored
+│   ├── db/portfolio.db    # SQLite database (auto-created; never committed)
 │   └── logs/nivesa.log    # Application log (auto-created)
 ├── requirements.txt
 └── .streamlit/config.toml # server settings + the Paper/Slate theme blocks

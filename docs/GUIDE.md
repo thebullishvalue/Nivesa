@@ -91,6 +91,8 @@ Written by triggers on the three tables above; UPDATE and DELETE on it are refus
 |----------|---------|-------------|
 | `NIVESA_DATA_DIR` | `data` | Base directory for database and logs |
 | `NIVESA_PASSWORD` | *(unset)* | Sign-in password; or `[auth] password` in Streamlit secrets. Unset = open |
+| `NIVESA_STORE_REPO` · `NIVESA_STORE_TOKEN` | *(unset)* | The private store; or `[storage] github_repo` / `github_token` in secrets |
+| `NIVESA_STORE_PATH` · `NIVESA_STORE_BRANCH` | `portfolio.db` · default branch | Optional: where in that repository |
 
 ### Streamlit Config
 
@@ -98,7 +100,11 @@ Server settings and the Paper / Slate theme blocks are in `.streamlit/config.tom
 
 ## Backup and Recovery
 
-### Manual Backup
+**Hosted with `[storage]`** (see the README, *Keeping the ledger*): every change is a commit in the
+private repository, so its history is the backup. To restore, open `portfolio.db`'s history there,
+revert to the state you want (or upload that version), then reboot the app.
+
+**Local only:**
 ```bash
 cp data/db/portfolio.db data/db/portfolio_backup_$(date +%Y%m%d).db
 ```

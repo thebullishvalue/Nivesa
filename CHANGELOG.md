@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.2.0] — 2026-11-24
+### Changed
+- **The ledger leaves this repository.** `data/db/portfolio.db` is no longer tracked (and is ignored), and
+  the golden snapshot that carried its figures is replaced. A hosted Nivesa keeps its ledger in a private
+  GitHub repository (`[storage]` in secrets): it loads the file once per server start, before the
+  database opens, and commits it back after any run that changed it — so edits survive Streamlit Cloud's
+  restarts, and the repository's history is a backup of every state. A load that fails opens nothing
+  (an empty or stale copy is never saved over the ledger) and offers a retry; a save that fails is
+  retried on the next action; a stored file changed outside the app is never overwritten, and the notice
+  rail says so. An empty store waits for a first entry rather than saving an empty ledger. Without
+  `[storage]` the local file is used as before; on Streamlit Cloud the rail warns that it will not last.
+- **The suite runs on an invented sample book** (`tests/fixture_book.py`): accounts, a bond held across
+  accounts, a pro-rata amortizer, interest receipts, a matured security. The golden snapshot is
+  re-captured from the 2.8.0 code on it, so the golden, analytics and write-path tests run on every
+  machine instead of skipping whenever the real ledger changed.
+### Note
+- The old ledger is still in this repository's git history. Make the repository private, or ask for the
+  history to be rewritten, to take it out of public view.
+
+---
+
 ## [3.1.0] — 2026-11-24
 ### Fixed
 - **Coupon dates on month-end maturities.** The coupon grid stepped back from maturity one period at a

@@ -182,7 +182,8 @@ def test_tracked_data_is_never_the_test_database():
     assert Path(os.environ["NIVESA_DATA_DIR"]).resolve() != (REPO / "data").resolve()
 
 
-def test_golden_copy_helper_does_not_touch_tracked_data(tmp_path):
-    """Sanity for anyone extending the suite: copying the book is the only way tests reach it."""
-    shutil.copytree(REPO / "data", tmp_path / "data")
+def test_sample_book_builds_where_asked(tmp_path):
+    """Sanity for anyone extending the suite: tests reach a book only through the sample-book builder."""
+    import fixture_book
+    assert fixture_book.build(tmp_path / "data") == tmp_path / "data" / "db" / "portfolio.db"
     assert (tmp_path / "data" / "db" / "portfolio.db").exists()

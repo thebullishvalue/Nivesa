@@ -1,8 +1,8 @@
 """Shared test setup.
 
-The suite NEVER touches the tracked ``data/`` (the owner's real book): before anything imports
-``core.config`` (which reads ``NIVESA_DATA_DIR`` once, at import), the whole ``data/`` tree is copied
-into a throwaway directory and ``NIVESA_DATA_DIR`` is pointed at the copy. Everything runs offline.
+The suite never touches a real book: before anything imports ``core.config`` (which reads
+``NIVESA_DATA_DIR`` once, at import), the invented sample book (``tests/fixture_book.py``) is built in a
+throwaway directory and ``NIVESA_DATA_DIR`` is pointed at it. Everything runs offline.
 """
 from __future__ import annotations
 
@@ -20,7 +20,9 @@ for _p in (str(TESTS / "golden"), str(TESTS), str(REPO)):
 
 _SCRATCH = Path(tempfile.mkdtemp(prefix="nivesa-test-"))
 DATA_COPY = _SCRATCH / "data"
-shutil.copytree(REPO / "data", DATA_COPY)
+import fixture_book  # noqa: E402
+
+fixture_book.build(DATA_COPY)
 os.environ["NIVESA_DATA_DIR"] = str(DATA_COPY)
 assert Path(os.environ["NIVESA_DATA_DIR"]).resolve() != (REPO / "data").resolve()
 
