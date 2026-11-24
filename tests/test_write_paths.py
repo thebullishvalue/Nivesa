@@ -453,7 +453,8 @@ _ID_COLS = {"bond_id", "transaction_id"}
 def _audit_object(name: str) -> bool:
     """Tables the 3.x app adds beside the 2.8.0 book: the audit trail (3.1) and the redemption schedule
     (3.3, tested in tests/test_schedule.py). The book's own tables must still match 2.8.0's."""
-    return name.startswith("audit_") or name == "sqlite_sequence" or "redemption_schedule" in name
+    return (name.startswith("audit_") or name == "sqlite_sequence" or "redemption_schedule" in name
+            or "bond_terms" in name)
 
 
 def _snapshot(db: str, known: "set[str] | None" = None) -> dict:

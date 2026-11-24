@@ -17,7 +17,7 @@ from core.bonds import (
 )
 from core.config import FLOW_ORDER, FREQ_MAP
 from core.db import db_query
-from core.schedule import schedules as _schedules
+from core.schedule import coupon_days as _coupon_days, schedules as _schedules
 
 
 def get_positions_dataframe():
@@ -31,6 +31,7 @@ def get_positions_dataframe():
 
     meta = db_query("SELECT * FROM security_metadata")
     plans = _schedules()      # contractual redemption schedules (core.schedule), per unit
+    cdays = _coupon_days()    # interest days that differ from the maturity date's day
     positions = []
 
     for (bid, acct), grp in txns.groupby(['bond_id', 'account']):
@@ -103,6 +104,10 @@ def get_positions_dataframe():
         # NOT be reduced by principal_repaid again — doing so double-counted
         # amortization and drove YTC negative on amortizing bonds.
         face     = cur_u * si['face_value']
+        # A bond whose whole face has been repaid is retired like one fully sold (3.5.0): it pays nothing
+        # more, and left in the book it counted as a live position with no face, for ever.
+        if face <= 1e-6:
+            continue
 
         day_count = mi['day_count'] if mi is not None and pd.notna(mi['day_count']) else 'Actual/365'
 
@@ -115,9 +120,14 @@ def get_positions_dataframe():
         # A contractual schedule, when the bond has one, replaces the cadence inferred above: the
         # instalments still to come, scaled to this position's units.
         plan = [(d, pu * cur_u) for d, pu in plans.get(bid, []) if d > date.today()] if bid in plans else None
+        # Interest on the bond's interest day, each coupon for the actual days it covers (core.bonds
+        # coupon_fraction) — the way the issuer pays it, so projections match the platform statements.
+        cday = cdays.get(bid)
+        idate = pd.to_datetime(mi['issue_date']).date() if mi is not None and pd.notna(mi['issue_date']) else None
         proj = generate_amortizing_schedule(
             face, si['coupon_rate'], si['frequency'], si['maturity_date'],
-            amort_installment, amort_months, principal_plan=plan,
+            amort_installment, amort_months, principal_plan=plan, coupon_day=cday, coupon_dc=day_count,
+            issue_date=idate,
         )
 
         # YTC = true money-weighted yield-to-cost over the position's actual
@@ -125,11 +135,12 @@ def get_positions_dataframe():
         # balance). Seasoning-invariant; reduces to the bullet YTC when there is
         # no amortization.
         ytc = calc_position_yield_to_cost(grp, si['coupon_rate'], si['frequency'], si['maturity_date'], si['face_value'], day_count,
-                                          future_principal=plan)
+                                          future_principal=plan, coupon_day=cday, coupon_dc=day_count,
+                                          issue_date=idate)
         # Duration is a TODAY risk metric: discount the REMAINING cashflows at a
         # today-anchored yield (best current-yield proxy absent a market mark).
         y_today = calc_yield_to_cost(face, cost, si['coupon_rate'], si['maturity_date'],
-                                     si['frequency'], day_count, as_of=date.today(), schedule=proj)
+                                     si['frequency'], day_count, as_of=date.today(), schedule=proj, coupon_day=cday)
         if y_today > 0:
             mac = calc_macaulay_duration(face, si['coupon_rate'], si['frequency'],
                                          si['maturity_date'], y_today, day_count, schedule=proj)
@@ -139,12 +150,17 @@ def get_positions_dataframe():
             mod = 0.0
 
         dtm = calc_days_to_maturity(si['maturity_date'])
+        # Average life: when the principal still outstanding comes back, weighted by amount — for a bond
+        # that repays in instalments it is shorter than the time to final maturity.
+        _p = [(cf['date'], cf['principal']) for cf in proj if cf['principal'] > 0]
+        _pt = sum(a for _d, a in _p)
+        avg_life = (sum(a * (d - date.today()).days for d, a in _p) / _pt / 365.25) if _pt > 0 else 0.0
         ann_cpn = face * si['coupon_rate']
 
         # Compute real last coupon date
         mat_date = pd.to_datetime(si['maturity_date']).date()
         today = date.today()
-        last_coupon = prev_coupon_date(si['maturity_date'], si['frequency'], today)
+        last_coupon = prev_coupon_date(si['maturity_date'], si['frequency'], today, coupon_day=cday)
 
         # Cap last coupon at issue_date if available
         issue_date = pd.to_datetime(mi['issue_date']).date() if mi is not None and pd.notna(mi['issue_date']) else None
@@ -170,10 +186,11 @@ def get_positions_dataframe():
             'principal_repaid': prin_rep, 'position_face_value': face,
             'amort_installment': amort_installment, 'amort_months': amort_months,
             'principal_plan': plan, 'has_schedule': bid in plans,
+            'coupon_day': cday, 'day_count': day_count, 'issue_date': idate,
             'annual_coupon_income': ann_cpn, 'nominal_yield': si['coupon_rate'],
             'yield_to_cost': ytc, 'macaulay_duration': mac,
             'modified_duration': mod, 'days_to_maturity': dtm,
-            'years_to_maturity': dtm / 365.25, 'accrued_interest': acc_int,
+            'years_to_maturity': dtm / 365.25, 'avg_life': avg_life, 'accrued_interest': acc_int,
             'holding_days': hold_days,
             'bond_type':      mi['bond_type']      if mi is not None else 'NCD',
             'credit_rating':  mi['credit_rating']  if mi is not None else 'Unrated',
@@ -215,6 +232,7 @@ def get_positions_dataframe():
         'Weighted Mac Duration':  w('macaulay_duration', df['macaulay_duration'] > 0),
         'Weighted Mod Duration':  w('modified_duration', df['macaulay_duration'] > 0),
         'Weighted Avg Maturity':  w('years_to_maturity'),
+        'Weighted Avg Life':      w('avg_life'),
     }
     return df, totals
 

@@ -163,13 +163,22 @@ _INSERTS = (
 )
 
 
-#: Fixes made since 2.8.0 that change its numbers, applied to the original before capture so the golden
-#: values are "2.8.0 plus these fixes" (each one is in the CHANGELOG and tested on its own):
+#: What the golden values are, since 3.5.0: the ORIGINAL 2.8.0 dashboard, ledger and master code (every
+#: aggregate, filter and displayed string) run on the CURRENT positions engine and bond maths. The maths
+#: has moved on from 2.8.0 on purpose — month-end coupon dates, coupons on the balance before a same-day
+#: repayment, interest by actual days on the bond's own interest day from its issue date, coupons per lot
+#: held — and is proved where it belongs: tests/test_bond_math.py against textbook answers and the
+#: platform-statement reconciliation (CHANGELOG 3.5.0). ``load_original`` swaps the engine in; the one
+#: call the 2.8.0 page makes into it directly takes the same arguments core.views passes:
 FIXES = (
-    # 3.3.1: a repayment on a coupon date does not reduce that coupon (core.bonds.calc_position_yield_to_cost)
-    ("            bal = original_face - sum(a for rd, a in reps if rd <= d)\n",
-     "            bal = original_face - sum(a for rd, a in reps if rd < d)\n"),
+    ("                p['maturity_date'], p['amort_installment'], p['amort_months'],\n            )\n",
+     "                p['maturity_date'], p['amort_installment'], p['amort_months'],\n"
+     "                principal_plan=p.get('principal_plan'), coupon_day=_day(p.get('coupon_day')),\n"
+     "                coupon_dc=p.get('day_count'), issue_date=p.get('issue_date'),\n            )\n"),
 )
+
+#: Positions-frame columns the 2.8.0 engine did not have (dropped from the golden records).
+NEW_POSITION_COLUMNS = ["principal_plan", "has_schedule", "coupon_day", "day_count", "issue_date"]
 
 
 def instrumented_source() -> str:
@@ -218,7 +227,20 @@ def load_original(data_dir: str):
     def _metric(col, style, title, value, sub="", icon=""):
         mod.__dict__["_METRICS"].append([title, value, sub])
     mod._render_metric = _metric
+
+    # the current engine (see FIXES), its clock frozen like the original's
+    sys.path.insert(0, str(REPO))
+    import core.bonds, core.book, core.schedule, core.views  # noqa: E401 — after NIVESA_DATA_DIR is set
+    for m in (core.bonds, core.book, core.schedule, core.views):
+        m.date = FrozenDate
+    mod.get_positions_dataframe = core.book.get_positions_dataframe
+    mod.generate_amortizing_schedule = core.bonds.generate_amortizing_schedule
+    mod._day = core.views._day
     return mod
+
+
+def _old_columns(df):
+    return df.drop(columns=[c for c in NEW_POSITION_COLUMNS if c in df.columns])
 
 
 def capture(data_dir: str) -> dict:
@@ -234,12 +256,12 @@ def capture(data_dir: str) -> dict:
     out: dict = {
         "meta": {
             "as_of": AS_OF.isoformat(),
-            "source": "app.py @ 8090864 (Nivesa 2.8.0), instrumented copy, bare-mode run",
+            "source": "app.py @ 8090864 (Nivesa 2.8.0) page code, instrumented, on the current core engine; bare-mode run",
             "fingerprint": book_fingerprint(os.path.join(data_dir, "db", "portfolio.db")),
             "accounts": accounts,
             "hashed_columns": sorted(HASH_COLS),
         },
-        "positions": {"rows": frame_records(df), "totals": {k: jsonable(v) for k, v in totals.items()}},
+        "positions": {"rows": frame_records(_old_columns(df)), "totals": {k: jsonable(v) for k, v in totals.items()}},
         "ledger": frame_records(ledger),
         "dashboard": {},
         "ledger_page": {},
@@ -254,7 +276,7 @@ def capture(data_dir: str) -> dict:
         cap = dict(mod._CAP)
         rec = {
             "concentration": frame_records(cap["concentration"]),
-            "positions": frame_records(cap["positions"]),
+            "positions": frame_records(_old_columns(cap["positions"])),
             "positions_export": frame_records(cap["positions_export"]),
             "maturity_frame_mb": [[r["bond_id"], r["account"], r["mb"]] for _, r in cap["maturity_frame"].iterrows()],
             "maturity_buckets": frame_records(cap["maturity_buckets"].reset_index()),

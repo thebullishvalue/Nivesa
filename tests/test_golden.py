@@ -73,7 +73,7 @@ def test_clock_is_frozen(book):
 
 #: Columns the positions engine gained after 2.8.0 (3.3.0: the redemption schedule). The sample book has
 #: no schedule, so they hold None / False; every 2.8.0 column is still compared exactly.
-NEW_POSITION_COLUMNS = ["principal_plan", "has_schedule"]
+NEW_POSITION_COLUMNS = ["principal_plan", "has_schedule", "coupon_day", "day_count", "issue_date"]
 
 
 def test_positions_frame_and_totals(book):

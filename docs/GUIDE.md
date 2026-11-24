@@ -23,7 +23,7 @@ rail's foot. The book itself is on every page's command bar.
 | — | **Overview** | What do we hold, and what does it earn? Cost, yield, coupon income, duration and composition; capital allocation by account; where the book sits by maturity. |
 | Analytics | **Positions** | What exactly do we hold? Every position, with export. |
 | | **Cashflows** | What comes in, and when? Future coupons and principal, month by month (the window looks forward), and every payment in the next twelve months. |
-| | **Maturity** | When does capital come back? The maturity ladder and every bond in it. |
+| | **Maturity** | When does capital come back? Principal by when it is repaid (instalments on their own dates), average life against final maturity, and every bond by final maturity. |
 | | **Issuers** | Where is the book concentrated? Issuer weights (amber at 5% of cost, red at 10%) and issuer detail. |
 | Operations | **Record Transaction** | Buy, Sell, Interest Receipt, Principal Repayment. |
 | | **Ledger** | The audit trail, filtered and windowed, with CSV and Excel export. |
@@ -73,7 +73,11 @@ Nivesa uses SQLite with three book tables and the audit trail:
 
 ### `redemption_schedule` — Contractual Principal Instalments
 One row per instalment a bond is due to pay, from its offer document or the platform it was bought on.
-Entered with the bond on **Add Security**, or later on **Edit Security**: lines of `date, ₹ per bond`, or N
+With it, the bond's **interest day** (`bond_terms.coupon_day`: the day of the month interest is paid, 1-30
+or 31 = month-end; none = the maturity date's day). Interest is projected the way issuers pay it: each
+period's actual days over the days in the payment's year (Actual/Actual — 366 in a leap year), from the
+issue date, on the bonds held on each date. Both are entered as **Payment terms** with the bond on
+**Add Security**, or later on **Edit Security**. The schedule: lines of `date, ₹ per bond`, or N
 equal instalments. Leave it empty for a bond that repays its whole face at maturity. The instalments
 still to come may not add up to more than the bond's current face (any rest is repaid at maturity), so a
 bond added part-way through its life takes its whole schedule, the instalments already behind it

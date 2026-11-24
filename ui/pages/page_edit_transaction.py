@@ -72,10 +72,12 @@ def render_edit_transaction_page():
         with c1:
             acct = st.selectbox("Account", ACCOUNTS, index=_safe_index(ACCOUNTS, txn['account']))
             td = st.date_input("Date", max_value=date.today(), value=pd.to_datetime(txn['trade_date']).date())
-            tt = st.selectbox("Type", TRANSACTION_TYPES, index=_safe_index(TRANSACTION_TYPES, orig_type))
+            # The type is fixed once recorded (the save rejects a change): shown, not offered.
+            tt = st.selectbox("Type", TRANSACTION_TYPES, index=_safe_index(TRANSACTION_TYPES, orig_type), disabled=True,
+                              help="To change the type, delete this transaction and record a new one.")
         with c2:
             if orig_type in ["Buy", "Sell"]:
-                u = st.number_input("Units", min_value=0, step=1, value=int(abs(txn['units'])))
+                u = st.number_input("Units", min_value=1, step=1, value=max(1, int(abs(txn['units']))))
                 p = st.number_input("Price", min_value=0.0, format="%.4f", value=float(txn['price']))
                 a = u * p
                 render_note(f"Amount {fmt_inr(a)}")

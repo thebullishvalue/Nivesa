@@ -137,7 +137,7 @@ def test_maturity_page_kpis_are_the_golden_values(apptest, frozen):
     shown = {t: (v, s) for t, v, s in GOLDEN["dashboard"]["kpi_metrics"]}
     assert kpis[0] == shown["Weighted Duration"][0]
     assert f"Modified {TOTALS['Weighted Mod Duration']:.2f}y" == shown["Weighted Duration"][1].replace(": ", " ")
-    assert kpis[1] == f"{TOTALS['Weighted Avg Maturity']:.2f}y"
+    assert kpis[1] == f"{TOTALS['Weighted Avg Life']:.2f}y"           # 3.5.0: average life, not final maturity
     rows = [r for r in GOLDEN["dashboard"]["All"]["maturity_rows"] if r["bucket"] != "Matured"]
     first = min(r["maturity_date"] for r in rows)
     assert kpis[2] == FrozenDate.fromisoformat(first[:10]).strftime("%d %b %Y")
@@ -151,9 +151,11 @@ def test_maturity_page_every_account(apptest, frozen, acct):
     at = _open(apptest, "maturity")
     md = _pick(at, PAGES["maturity"], acct, f"maturity/{acct}")
     g = GOLDEN["dashboard"][acct]
-    nb, nr = len(g["maturity_buckets"]), len(g["maturity_rows"])
+    from core.book import get_positions_dataframe
+    from core.views import principal_ladder
+    nb, nr = len(principal_ladder(get_positions_dataframe()[0], acct)), len(g["maturity_rows"])
     ctx = _contexts(md)
-    assert f"{_scope(acct)} · {nb} bucket{'s' if nb != 1 else ''} · face and cost by time to maturity · ₹ lakh" in ctx
+    assert f"{_scope(acct)} · {nb} bucket{'s' if nb != 1 else ''} · principal and cost by when it comes back · ₹ lakh" in ctx
     assert any(c.startswith(f"{_scope(acct)} · {nr} position") for c in ctx), ctx
 
 
@@ -333,3 +335,25 @@ def test_analytics_pages_on_an_empty_book(apptest, monkeypatch, tmp_path, url):
     _goto(at, url)
     md = _assert_clean(at, f"empty {url}")
     assert 'class="empty-state"' in md and 'class="section-hdr' in md and not at.selectbox
+
+
+def test_principal_ladder_is_the_2_8_0_ladder_for_bullets_and_conserves_the_book(frozen):
+    """By when the principal comes back: a bullet bond's face lands at its maturity exactly as the 2.8.0
+    ladder put it; a bond that repays in instalments spreads its face and cost over their dates; nothing is
+    lost or added."""
+    import core.views as v
+    from core.book import get_positions_dataframe
+    df, _t = get_positions_dataframe()
+    df = v.add_weight_columns(df)
+    for acct in ACCOUNTS:
+        sub = df if acct == "All" else df[df["account"] == acct]
+        pl = v.principal_ladder(df, acct)
+        assert pl["Face"].sum() == pytest.approx(sub["position_face_value"].sum())
+        assert pl["Cost"].sum() == pytest.approx(sub["cost_basis"].sum())
+        bullets = sub[(sub["amort_installment"] == 0) & sub["principal_plan"].isna()]
+        if len(bullets) == len(sub):
+            _m, old = v.maturity_ladder(df, acct)
+            assert pl[["Cost", "Face"]].round(6).equals(old[["Cost", "Face"]].round(6))
+    cedar = df[df["issuer"] == "Cedar Housing"]
+    assert (cedar["amort_installment"] > 0).all()              # the sample amortizer: spread over several buckets
+    assert len(v.principal_ladder(cedar)) > 1

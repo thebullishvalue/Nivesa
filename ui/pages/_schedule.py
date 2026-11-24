@@ -25,7 +25,7 @@ _EVERY = {"Monthly": 1, "Quarterly": 3, "Half-yearly": 6, "Yearly": 12}
 
 
 def render_schedule_editor(bid: str, sec, meta) -> None:
-    render_sub_header("Repayment schedule")
+    render_sub_header("Payment terms")
     face = sch.original_face(bid)
     maturity = pd.to_datetime(sec["maturity_date"]).date()
     issue = pd.to_datetime(meta["issue_date"]).date() if meta is not None and pd.notna(meta["issue_date"]) else None
@@ -57,36 +57,47 @@ def render_schedule_editor(bid: str, sec, meta) -> None:
         )
 
     with st.form("schedule_form"):
+        day = interest_day_field("sched", sch.coupon_days().get(bid))
         lines = "\n".join(f"{pd.to_datetime(r['due_date']):%Y-%m-%d}, {r['principal_per_unit']:.2f}"
                           for _, r in cur.iterrows())
         fields = schedule_fields("sched", lines=lines,
                                  source=cur["source"].iloc[0] if not cur.empty and cur["source"].iloc[0] else "")
-        clear = st.checkbox("Remove this bond's schedule", key="sched_clear") if not cur.empty else False
-        saved = st.form_submit_button("Save schedule", type="primary")
+        saved = st.form_submit_button("Save payment terms", type="primary")
 
     if not saved:
         return
-    if clear:
-        sch.replace_schedule(bid, [])
-        set_notification(f"Schedule removed for **{sec['issuer']}**.", "success")
-        st.rerun()
     try:
         rows = schedule_rows(fields, face)
     except ValueError as e:
-        form_error(f"Schedule not saved: {e}.")
-        st.stop()
-    if not rows:
-        form_error("No instalments to save. To remove the schedule, tick “Remove this bond's schedule”.")
+        form_error(f"Payment terms not saved: {e}.")
         st.stop()
     errors, warnings = sch.check(rows, face=float(sec["face_value"]), issue=issue, maturity=maturity)
     if errors:
-        form_error("Schedule not saved: " + "; ".join(errors) + ".")
+        form_error("Payment terms not saved — repayment schedule: " + "; ".join(errors) + ".")
         st.stop()
     for w in warnings:
         form_warning(w[0].upper() + w[1:] + ".")
+    sch.set_coupon_day(bid, day)
     sch.replace_schedule(bid, rows, source=fields["source"] or "entered")
-    set_notification(f"Repayment schedule saved for **{sec['issuer']}**: {len(rows)} instalments.", "success")
+    what = f"{len(rows)} instalments" if rows else "repays at maturity"
+    set_notification(f"Payment terms saved for **{sec['issuer']}**: {what}.", "success")
     st.rerun()
+
+
+#: "Interest paid on": the maturity date's day (stored as none), a day of the month, or the month's last day.
+INTEREST_DAYS = ["Maturity date's day"] + [f"{d}{'st' if d in (1, 21) else 'nd' if d in (2, 22) else 'rd' if d in (3, 23) else 'th'} of the month"
+                                           for d in range(1, 31)] + ["Last day of the month"]
+
+
+def interest_day_field(key: str, current: "int | None" = None) -> "int | None":
+    """The bond's interest day, drawn inside the caller's form; None = the maturity date's day."""
+    idx = 0 if current is None else (31 if int(current) >= 31 else int(current))
+    pick = st.selectbox("Interest paid on", INTEREST_DAYS, index=idx, key=f"{key}_day",
+                        help="The day of the month the bond pays its interest. Many NCDs pay on the 1st or at "
+                             "month-end and make a last, shorter payment at maturity; most pay on the maturity "
+                             "date's day. Interest is counted by actual days, on the bond's day count.")
+    i = INTEREST_DAYS.index(pick)
+    return None if i == 0 else i
 
 
 def schedule_fields(key: str, *, lines: str = "", source: str = "") -> dict:

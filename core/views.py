@@ -29,7 +29,7 @@ __all__ = [
     "maturity_ladder", "maturity_rows", "cashflow_projection", "cashflow_totals", "nearterm_cashflows",
     "issuer_detail", "ledger_tab", "ledger_page", "securities_master", "account_options",
     "allocation_by_bucket", "matured_mask", "maturing_soon", "tape_items", "command_bar", "book_notices",
-    "is_empty_book", "due_repayment_notices",
+    "is_empty_book", "due_repayment_notices", "principal_ladder",
     "FORWARD_WINDOW_MONTHS", "forward_window_end", "in_forward_window", "CONCENTRATION_CAUTION",
     "CONCENTRATION_DANGER", "concentration_tier", "top_issuers", "top_share", "next_maturities",
 ]
@@ -166,6 +166,11 @@ def maturity_rows(mat_df):
     return pd.concat(parts) if parts else mat_df.iloc[0:0]  # seam
 
 
+def _day(v):
+    """An interest day from the positions frame (pandas holds a missing one as NaN) → int or None."""
+    return None if v is None or pd.isna(v) else int(v)
+
+
 def cashflow_projection(df, cf_filter='All'):  # seam
     """``(cdf, mcf, has_amort)``: every projected future cashflow (one row per position-date, with
     issuer/account), the monthly coupon/principal series, and whether any position amortizes.
@@ -189,6 +194,8 @@ def cashflow_projection(df, cf_filter='All'):  # seam
             p['position_face_value'], p['coupon_rate'], p['frequency'],
             p['maturity_date'], p['amort_installment'], p['amort_months'],
             principal_plan=p.get('principal_plan'),
+            coupon_day=_day(p.get('coupon_day')), coupon_dc=p.get('day_count'),
+            issue_date=p.get('issue_date'),
         )
         for cf in schedule:
             cf['issuer'] = p['issuer']
@@ -494,3 +501,35 @@ def due_repayment_notices() -> list[dict]:
     return [{"kind": "warning", "title": "Repayments due",
              "body": f"{fmt_inr(due['amount'].sum())} of scheduled principal has no entry: {names}. Check your "
                      f"bank statement, then record them under Operations → Record Transaction."}]
+
+
+def principal_ladder(df, flt='All'):
+    """Face and cost per ladder bucket by WHEN THE PRINCIPAL COMES BACK (3.5.0): each position's projected
+    principal flows (instalments and the final redemption — the stream the Cashflows page shows) land in
+    the bucket of their own date, and its cost is spread over them in proportion; a position past maturity
+    still carrying face sits in Matured. For a bullet bond this is the 2.8.0 ladder exactly; for a bond
+    that repays in instalments it is where its capital actually returns. Indexed in ladder order by the
+    buckets that hold something; columns Cost, Face, N (positions with principal in the bucket)."""
+    sub = df if flt == 'All' else df[df['account'] == flt]
+    today = date.today()
+    mat = matured_mask(sub)
+    rows = []                                   # (bucket, cost, face, position key)
+    for _, p in sub.iterrows():
+        pkey = (p['bond_id'], p['account'])
+        if mat.loc[p.name]:
+            rows.append(("Matured", p['cost_basis'], p['position_face_value'], pkey))
+            continue
+        flows = [(cf['date'], cf['principal']) for cf in generate_amortizing_schedule(
+            p['position_face_value'], p['coupon_rate'], p['frequency'], p['maturity_date'],
+            p['amort_installment'], p['amort_months'], principal_plan=p.get('principal_plan'),
+            coupon_day=_day(p.get('coupon_day')), coupon_dc=p.get('day_count'), issue_date=p.get('issue_date'),
+        ) if cf['principal'] > 0]
+        total = sum(a for _d, a in flows)
+        for d, a in flows:
+            share = a / total if total > 0 else 0.0
+            rows.append((_maturity_bucket((d - today).days), p['cost_basis'] * share, a, pkey))
+    if not rows:
+        return pd.DataFrame(columns=["Cost", "Face", "N"])
+    t = pd.DataFrame(rows, columns=["mb", "Cost", "Face", "pos"])
+    present = [b for b in MATURITY_BUCKET_ORDER if (t['mb'] == b).any()]
+    return t.groupby('mb').agg(Cost=('Cost', 'sum'), Face=('Face', 'sum'), N=('pos', 'nunique')).reindex(present)

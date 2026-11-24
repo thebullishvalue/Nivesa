@@ -20,7 +20,7 @@ from core import schedule as sch
 from core.db import db_execute, db_query
 from ui.components import render_section_header, render_sub_header
 from ui.notices import form_error, set_notification
-from ui.pages._schedule import schedule_fields, schedule_rows
+from ui.pages._schedule import interest_day_field, schedule_fields, schedule_rows
 
 
 def render_add_security_page():
@@ -50,7 +50,8 @@ def render_add_security_page():
 
         notes = st.text_area("Notes")
 
-        render_sub_header("Repayment schedule")
+        render_sub_header("Payment terms")
+        cday = interest_day_field("add_sched")
         sched = schedule_fields("add_sched")
         submitted = st.form_submit_button("Add security", type="primary")
 
@@ -79,6 +80,7 @@ def render_add_security_page():
                         "VALUES (?,?,?,?,?,?,?,?)",
                         (bid, btype, cr, dc, idate.isoformat() if idate else None, listing, sector, notes),
                     )
+                    sch.set_coupon_day(bid, cday)
                     if rows:
                         sch.replace_schedule(bid, rows, source=sched["source"] or "entered")
                         for w in sch.check(rows, face=fv, issue=idate, maturity=mat)[1]:

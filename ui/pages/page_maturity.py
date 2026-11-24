@@ -21,7 +21,7 @@ import plotly.graph_objects as go
 
 from core.formatting import fmt_inr, fmt_inr_short, fmt_pct
 from core.views import (cashflow_projection, cashflow_totals, is_empty_book, matured_mask, maturity_ladder,
-                        maturity_rows, nearterm_cashflows, next_maturities)
+                        maturity_rows, nearterm_cashflows, next_maturities, principal_ladder)
 from ui.book import load_book
 from ui.components import render_chart_panel, render_empty_state, render_kpi_strip, render_section_header
 from ui.components import render_sub_header, render_table_panel
@@ -32,7 +32,9 @@ from ui.theme import chart_color, chart_layout, style_axes
 TOOLTIPS = {
     "duration": "Macaulay duration of the remaining projected cashflows (amortization included), weighted by "
                 "cost basis over positions with a solvable yield; modified duration beside it.",
-    "maturity": "Years to each bond's final maturity, weighted by cost basis.",
+    "maturity": "When the principal still outstanding comes back, in years, weighted by amount within each bond "
+                "and by cost across the book — shorter than the time to final maturity for bonds that repay "
+                "in instalments.",
     "next": "The soonest maturity date among live positions not yet matured, and who holds it.",
     "due": "Principal projected to be repaid in the next twelve months — maturities and amortization — "
            "from the same projection the Cashflows page draws.",
@@ -40,9 +42,10 @@ TOOLTIPS = {
                "repayment under Operations → Record Transaction to retire one.",
 }
 
-#: The ladder's buckets by days to maturity (``core.book._maturity_bucket``), for the chart footer.
-BUCKET_RULE = ("Buckets by days to maturity: 0-3M ≤ 90 · 3-6M ≤ 180 · 6-12M ≤ 365 · 1-2Y ≤ 730 · "
-               "2-3Y ≤ 1,095 · 3-5Y ≤ 1,825 · 5Y+ beyond; Matured = past its maturity date.")
+#: The ladder's buckets (``core.book._maturity_bucket``), for the chart footer.
+BUCKET_RULE = ("Each repayment sits in the bucket of its own date — instalments as scheduled, the rest at maturity: "
+               "0-3M ≤ 90 days · 3-6M ≤ 180 · 6-12M ≤ 365 · 1-2Y ≤ 730 · 2-3Y ≤ 1,095 · 3-5Y ≤ 1,825 · 5Y+ "
+               "beyond; Matured = face still held past its maturity date.")
 
 
 def maturity_kpis(df, totals: dict) -> list[dict]:
@@ -66,8 +69,9 @@ def maturity_kpis(df, totals: dict) -> list[dict]:
         {"label": "Weighted Duration", "value": f"{totals['Weighted Mac Duration']:.2f}y",
          "subtext": f"Modified {totals['Weighted Mod Duration']:.2f}y", "color_class": "neutral",
          "tooltip": TOOLTIPS["duration"]},
-        {"label": "Avg Maturity", "value": f"{totals['Weighted Avg Maturity']:.2f}y",
-         "subtext": "cost-weighted", "color_class": "neutral", "tooltip": TOOLTIPS["maturity"]},
+        {"label": "Avg Life", "value": f"{totals['Weighted Avg Life']:.2f}y",
+         "subtext": f"final maturity {totals['Weighted Avg Maturity']:.2f}y", "color_class": "neutral",
+         "tooltip": TOOLTIPS["maturity"]},
         {"label": "Next Maturity", "value": nxt_value, "subtext": nxt_sub, "color_class": "info",
          "tooltip": TOOLTIPS["next"]},
         {"label": "Principal Due in 12M", "value": fmt_inr_short(prin12),
@@ -84,8 +88,9 @@ def _answer(df, totals) -> str:
     cdf, _mcf, _amort = cashflow_projection(df)
     prin12 = cashflow_totals(nearterm_cashflows(cdf))[1] if not cdf.empty else 0.0
     face = totals['Total Face Value']
-    out = (f"Weighted duration {totals['Weighted Mac Duration']:.2f}y against an average maturity of "
-           f"{totals['Weighted Avg Maturity']:.2f}y. {fmt_inr_short(prin12)} of principal comes back in the next "
+    out = (f"Weighted duration {totals['Weighted Mac Duration']:.2f}y against an average life of "
+           f"{totals['Weighted Avg Life']:.2f}y (final maturity {totals['Weighted Avg Maturity']:.2f}y). "
+           f"{fmt_inr_short(prin12)} of principal comes back in the next "
            f"twelve months ({fmt_pct(prin12 / face if face > 0 else 0)} of face)")
     nxt = next_maturities(df)
     if not nxt.empty:
@@ -122,7 +127,7 @@ def _ladder_figure(buckets):
 
 #: The ladder table: 2.8.0's seven columns.
 _COLS = (
-    ("mb", "Bucket", None),
+    ("mb", "Final maturity", None),
     ("issuer", "Issuer", None),
     ("account", "Acct", None),
     ("position_face_value", "Face Value", fmt_inr),
@@ -146,19 +151,20 @@ def render_maturity_page() -> None:
 
     render_section_header(
         "The Ladder",
-        "Face value (cyan) and cost (slate) by time to maturity, for the account chosen below. A bond past "
-        "its maturity date that still carries face sits in Matured, in amber, until its principal "
-        "repayment is recorded.",
+        "Principal (cyan) and the cost behind it (slate) by when it comes back — instalments on their own "
+        "dates, the rest at maturity — for the account chosen below. A bond past its maturity date that "
+        "still carries face sits in Matured, in amber, until its principal repayment is recorded.",
         icon="bar-chart", accent="cyan")
     acct = account_filter(df, "mat_acct", help="Which account's positions the ladder and its table show.")
     scope = scope_of(acct)
-    mat_df, buckets = maturity_ladder(df, acct)
+    mat_df, _final = maturity_ladder(df, acct)
+    buckets = principal_ladder(df, acct)
     if mat_df.empty or buckets.empty:
         render_empty_state("No positions in this account", "Choose another account above.", eyebrow="Maturity")
         return
     render_chart_panel(
         _ladder_figure(buckets), "maturity-ladder",
-        context=f"{scope} · {plural(len(buckets), 'bucket')} · face and cost by time to maturity · ₹ lakh",
+        context=f"{scope} · {plural(len(buckets), 'bucket')} · principal and cost by when it comes back · ₹ lakh",
         footer=html.escape(BUCKET_RULE),
     )
     render_sub_header("Bond by bond")
@@ -167,7 +173,7 @@ def render_maturity_page() -> None:
     view["maturity_date"] = pd.to_datetime(view["maturity_date"])
     render_table_panel(
         view, "maturity-rows",
-        context=f"{scope} · {plural(len(view), 'position')} · ladder order, soonest first within a bucket",
+        context=f"{scope} · {plural(len(view), 'position')} · by final maturity, soonest first within a bucket",
         label_col="issuer",
         col_labels={c: h for c, h, _f in _COLS},
         col_format={c: f for c, _h, f in _COLS if f is not None},

@@ -39,6 +39,14 @@ CREATE TABLE IF NOT EXISTS redemption_schedule (
     UNIQUE (bond_id, due_date)
 )"""
 
+#: The bond's interest day, when it is not the maturity date's day (1-31; 31 = month-end). One row per
+#: bond that has one; none means interest falls on the maturity date's day each period.
+_TERMS = """
+CREATE TABLE IF NOT EXISTS bond_terms (
+    bond_id    TEXT PRIMARY KEY REFERENCES securities (bond_id),
+    coupon_day INTEGER CHECK (coupon_day BETWEEN 1 AND 31)
+)"""
+
 #: A recorded repayment this many days either side of a scheduled date counts as that instalment
 #: (issuers pay on the next business day; entries are made on the day the money arrives).
 MATCH_DAYS = 20
@@ -48,6 +56,7 @@ def schedule_init() -> bool:
     try:
         with closing(_connect()) as conn, conn:
             conn.execute(_TABLE)
+            conn.execute(_TERMS)
         return True
     except sqlite3.Error as e:
         logger.error(f"Redemption schedule init failed: {e}")
@@ -73,6 +82,32 @@ def schedules() -> "dict[str, list[tuple[date, float]]]":
     for _, r in df.iterrows():
         out.setdefault(r["bond_id"], []).append((pd.to_datetime(r["due_date"]).date(), float(r["principal_per_unit"])))
     return out
+
+
+def _terms_exist() -> bool:
+    try:
+        with closing(_connect()) as conn:
+            return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bond_terms'").fetchone() is not None
+    except sqlite3.Error:
+        return False
+
+
+def coupon_days() -> "dict[str, int]":
+    """bond_id → interest day, for the bonds that have one (empty when the book has no terms table)."""
+    if not _terms_exist():
+        return {}
+    df = db_query("SELECT bond_id, coupon_day FROM bond_terms WHERE coupon_day IS NOT NULL")
+    return {r["bond_id"]: int(r["coupon_day"]) for _, r in df.iterrows()}
+
+
+def set_coupon_day(bond_id: str, day: "int | None") -> None:
+    """Set (1-31) or clear (None: the maturity date's day) a bond's interest day."""
+    with closing(_connect()) as conn, conn:
+        if day is None:
+            conn.execute("DELETE FROM bond_terms WHERE bond_id=?", (bond_id,))
+        else:
+            conn.execute("INSERT INTO bond_terms (bond_id, coupon_day) VALUES (?, ?) "
+                         "ON CONFLICT(bond_id) DO UPDATE SET coupon_day=excluded.coupon_day", (bond_id, int(day)))
 
 
 def schedule_frame(bond_id: str) -> pd.DataFrame:

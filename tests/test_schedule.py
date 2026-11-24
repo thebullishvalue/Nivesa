@@ -230,11 +230,11 @@ def test_edit_security_saves_a_schedule_from_lines(app_book, apptest):
     assert not at.exception
     ta = next(t for t in at.text_area if t.label.startswith("One instalment per line"))
     ta.input("2027-03-15, 500\n2028-03-15, 500")
-    next(b for b in at.button if b.label == "Save schedule").click().run()
+    next(b for b in at.button if b.label == "Save payment terms").click().run()
     assert not at.exception
     assert sch.schedules()[ALDER] == [(D(2027, 3, 15), 500.0), (D(2028, 3, 15), 500.0)]
     md = " ".join(m.value for m in at.markdown)
-    assert "Repayment schedule saved for Alder Finance: 2 instalments" in md
+    assert "Payment terms saved for Alder Finance: 2 instalments" in md
     assert "REDEMPTION SCHEDULE · 2 instalments · ₹1,000.00 of ₹1,000.00 per bond" in md
 
 
@@ -244,7 +244,7 @@ def test_edit_security_rejects_a_schedule_past_maturity(app_book, apptest):
     box = next(s for s in at.selectbox if s.label == "Select Security")
     box.select(next(o for o in box.options if "Alder" in o)).run()
     next(t for t in at.text_area if t.label.startswith("One instalment per line")).input("2030-01-01, 1000")
-    next(b for b in at.button if b.label == "Save schedule").click().run()
+    next(b for b in at.button if b.label == "Save payment terms").click().run()
     assert "after maturity" in " ".join(m.value for m in at.markdown)
     assert ALDER not in sch.schedules()
 
@@ -301,3 +301,56 @@ def test_add_security_without_a_schedule_is_a_bullet(app_book, apptest):
     md = _add(at, "INE999J07045")
     assert "Juniper Finance" in md and "Repayment schedule:" not in md
     assert _bid("INE999J07045") not in sch.schedules()
+
+
+# ── payment terms: the interest day is a form field, not data only a script can set ──────────
+def test_add_security_saves_the_interest_day(app_book, apptest):
+    at = apptest().run()
+    _goto(at, "add-security")
+    next(s for s in at.selectbox if s.label == "Interest paid on").select("Last day of the month")
+    _add(at, "INE999J07052")
+    assert sch.coupon_days()[_bid("INE999J07052")] == 31
+
+
+def test_edit_security_sets_and_clears_payment_terms(app_book, apptest):
+    at = apptest().run()
+    _goto(at, "edit-security")
+    box = next(s for s in at.selectbox if s.label == "Select Security")
+    box.select(next(o for o in box.options if "Cedar" in o)).run()
+    assert next(s for s in at.selectbox if s.label == "Interest paid on").value == "Maturity date's day"
+    next(s for s in at.selectbox if s.label == "Interest paid on").select("1st of the month")
+    next(t for t in at.text_area if t.label.startswith("One instalment per line")).input("")
+    next(b for b in at.button if b.label == "Save payment terms").click().run()
+    assert not at.exception
+    assert sch.coupon_days()[CEDAR] == 1 and CEDAR not in sch.schedules()     # empty schedule = repays at maturity
+    assert "Payment terms saved for Cedar Housing: repays at maturity" in " ".join(m.value for m in at.markdown)
+
+
+def test_edit_transaction_shows_the_type_but_does_not_offer_it(app_book, apptest):
+    at = apptest().run()
+    _goto(at, "edit-transaction")
+    box = next(s for s in at.selectbox if s.label == "Select Transaction")
+    box.select(box.options[0]).run()
+    t = next(s for s in at.selectbox if s.label == "Type")
+    assert t.disabled
+
+
+def test_record_repayment_shows_what_is_scheduled(app_book, apptest):
+    at = apptest().run()
+    _goto(at, "record-transaction")
+    box = next(s for s in at.selectbox if s.label == "Select Security")
+    box.select(next(o for o in box.options if "Cedar" in o)).run()
+    next(s for s in at.selectbox if s.label == "Transaction Type").select("Principal_Repayment").run()
+    next(s for s in at.selectbox if s.label == "Account").select("MANTHAN").run()
+    next(d for d in at.date_input if d.label == "Date").set_value(D(2026, 9, 12)).run()
+    md = " ".join(m.value for m in at.markdown)
+    assert "Scheduled 10 Sep 2026: ₹100.00 per bond · ₹1,000.00 for 10 bonds in MANTHAN" in md
+
+
+def test_a_bond_repaid_in_full_leaves_the_book(book):
+    """The last instalment recorded, the position is retired (as a sale of every unit would retire it)."""
+    from core.book import get_positions_dataframe
+    sch.replace_schedule(CEDAR, [(D(2025, 6, 10), 100), (D(2026, 6, 10), 100), (D(2026, 9, 10), 800)])
+    assert sch.record_due(sch.due_unrecorded(D(2026, 11, 24)))[0]
+    df, totals = get_positions_dataframe()
+    assert CEDAR not in set(df["bond_id"]) and totals["Num Positions"] == len(df)

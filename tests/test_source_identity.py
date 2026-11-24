@@ -42,7 +42,9 @@ AMENDED = {
     # 3.1.0: the coupon grid is measured from maturity (k periods back), not stepped one period
     # at a time — month-end maturities drifted to the 30th after the first 30-day month.
     "core/bonds.py": {"prev_coupon_date", "calc_position_yield_to_cost", "generate_amortizing_schedule",
-                      "generate_cashflow_schedule"},
+                      "generate_cashflow_schedule",
+                      # 3.5.0: interest by actual days, on the bond's interest day, from its issue date
+                      "accrued_at", "calc_accrued_interest", "calc_yield_to_cost"},
     # 3.3.0: a bond's contractual redemption schedule (core.schedule), when it has one, drives the
     # projected principal and the yield to cost; with none, the 2.8.0 path runs unchanged.
     "core/book.py": {"get_positions_dataframe"},

@@ -17,19 +17,71 @@ from dateutil.relativedelta import relativedelta
 from core.config import FREQ_MAP
 
 
-def _coupon_grid(maturity, months, after):
+def _on_day(d, day):
+    """``d`` moved to day ``day`` of its month (31 = the month's last day, clipped for short months)."""
+    return d.replace(day=min(int(day), calendar.monthrange(d.year, d.month)[1]))
+
+
+def _coupon_grid(maturity, months, after, coupon_day=None):
     """Coupon dates strictly after `after`, newest first: maturity, maturity - 1 period, ...
 
     Each date is measured from MATURITY (k periods back), never from the previous date. Stepping
     one period at a time let a month-end date stick to a shorter month's last day: a monthly bond
-    maturing on the 31st drifted to the 30th for every month after the first November it met."""
+    maturing on the 31st drifted to the 30th for every month after the first November it met.
+
+    `coupon_day` (1-31, 31 = month-end) is the day the bond pays interest when it is not the maturity
+    date's day — many NCDs pay on the 1st or at month-end and make a last, broken-period payment at
+    maturity. The regular date of the maturity month is kept when it falls before maturity."""
     dates, k = [], 0
     d = maturity
     while d > after:
         dates.append(d)
         k += 1
         d = maturity - relativedelta(months=months * k)
+        if coupon_day is not None:
+            d = _on_day(d, coupon_day)
+    if coupon_day is not None:
+        same = _on_day(maturity, coupon_day)
+        if after < same < maturity:
+            dates.insert(1, same)
     return dates
+
+
+def _coupon_periods(maturity, months, after, coupon_day=None, issue=None):
+    """[(start, end)] for every coupon date `end` after `after`, oldest first; `start` is the coupon
+    date before it (the one at or before `after` for the first). No period starts before ``issue``:
+    interest runs from allotment, so the first coupon after issue pays only from the issue date."""
+    ends = sorted(_coupon_grid(maturity, months, after, coupon_day))
+    if issue is not None:
+        ends = [e for e in ends if e > issue]
+    if not ends:
+        return []
+    first = prev_coupon_date(maturity, None, ends[0] - relativedelta(days=1), months=months, coupon_day=coupon_day)
+    starts = [first] + ends[:-1]
+    if issue is not None:
+        starts = [max(s, issue) for s in starts]
+    return list(zip(starts, ends))
+
+
+def coupon_fraction(start, end, convention):
+    """The year fraction one coupon pays for, ``start`` → ``end``.
+
+    Actual/Actual is the Indian NCD convention (SEBI): the period's actual days over the days in the
+    year of the PAYMENT (366 in a leap year) — verified against platform cashflow statements to the
+    paisa, e.g. 31 days paid in Jan 2028 on Rs 2 lakh at 12% = 2,032.78 (31/366). The other
+    conventions are the usual day-count fractions."""
+    if convention == "Actual/Actual":
+        e = pd.to_datetime(end).date()
+        s = pd.to_datetime(start).date()
+        return max(0.0, (e - s).days / (366 if calendar.isleap(e.year) else 365))
+    return day_count_fraction(start, end, convention)
+
+
+def _coupon(balance, coupon_rate, freq, start, end, coupon_dc):
+    """One coupon: actual days when ``coupon_dc`` names a convention, else a flat rate ÷ frequency."""
+    if coupon_dc:
+        return balance * coupon_rate * coupon_fraction(start, end, coupon_dc)
+    return balance * coupon_rate / freq
 
 
 def day_count_fraction(start_date, end_date, convention="Actual/365"):
@@ -65,19 +117,28 @@ def day_count_fraction(start_date, end_date, convention="Actual/365"):
     except (ValueError, TypeError):
         return 0.0
 
-def prev_coupon_date(maturity_str, frequency, as_of):
+def prev_coupon_date(maturity_str, frequency, as_of, months=None, coupon_day=None):
     """The coupon date on or immediately before `as_of`, walking the schedule
     back from maturity — the same maturity-anchored grid every projection in
-    this module uses."""
+    this module uses (with the bond's interest day, when it has one)."""
     mat = pd.to_datetime(maturity_str).date()
-    months = 12 // FREQ_MAP.get(frequency, 1)
+    months = months or 12 // FREQ_MAP.get(frequency, 1)
+    if as_of >= mat:
+        return mat
+    if coupon_day is not None:
+        same = _on_day(mat, coupon_day)
+        if same < mat and same <= as_of:
+            return same
     k, d = 0, mat
     while d > as_of:
         k += 1
         d = mat - relativedelta(months=months * k)
+        if coupon_day is not None:
+            d = _on_day(d, coupon_day)
     return d
 
-def accrued_at(balance, coupon_rate, frequency, maturity_str, as_of, day_count="Actual/365"):
+def accrued_at(balance, coupon_rate, frequency, maturity_str, as_of, day_count="Actual/365", coupon_day=None,
+               issue=None):
     """Interest accrued on `balance` between the previous coupon date and
     `as_of`.
 
@@ -88,8 +149,10 @@ def accrued_at(balance, coupon_rate, frequency, maturity_str, as_of, day_count="
     the first projected coupon can fall a day after the purchase and still pay
     a full period — worth up to 72bps of phantom yield on a monthly payer
     (verified against a prorated-first-coupon reference across the book)."""
-    pc = prev_coupon_date(maturity_str, frequency, as_of)
-    return balance * coupon_rate * day_count_fraction(pc, as_of, day_count)
+    pc = prev_coupon_date(maturity_str, frequency, as_of, coupon_day=coupon_day)
+    if issue is not None:
+        pc = max(pc, issue)
+    return balance * coupon_rate * coupon_fraction(pc, as_of, day_count)
 
 def calc_accrued_interest(face_value, coupon_rate, frequency, day_count="Actual/365", last_coupon_date=None, maturity_date=None):
     try:
@@ -104,7 +167,7 @@ def calc_accrued_interest(face_value, coupon_rate, frequency, day_count="Actual/
             days = ((365.25 / freq) / 2)
             return face_value * coupon_rate / 365.25 * days
         
-        frac = day_count_fraction(last_coupon_date, today, day_count)
+        frac = coupon_fraction(last_coupon_date, today, day_count)
         return face_value * coupon_rate * frac
     except (ValueError, TypeError):
         return 0.0
@@ -144,7 +207,7 @@ def calc_modified_duration(mac, ytm, frequency):
     return mac / (1 + ytm / freq) if ytm > 0 else mac
 
 def calc_yield_to_cost(fv, cost, coupon_rate, maturity_str, frequency, day_count="Actual/365",
-                       as_of=None, schedule=None):
+                       as_of=None, schedule=None, coupon_day=None):
     """Yield locked in at `as_of`: the NOMINAL annual rate, compounded at the
     coupon frequency, equating the dirty price to the cashflows to maturity.
 
@@ -171,7 +234,7 @@ def calc_yield_to_cost(fv, cost, coupon_rate, maturity_str, frequency, day_count
         # Dirty price = clean cost + interest accrued since the last coupon.
         # The cashflows below are full contractual coupons, so the price they
         # are solved against must carry the accrued leg too (see accrued_at).
-        price = cost + accrued_at(fv, coupon_rate, frequency, maturity_str, anchor, day_count)
+        price = cost + accrued_at(fv, coupon_rate, frequency, maturity_str, anchor, day_count, coupon_day)
 
         cfs = []
         for cf in schedule:
@@ -251,7 +314,8 @@ def _xirr(cashflows, freq=1):
     return y
 
 def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
-                                face_value_pu, day_count="Actual/365", future_principal=None):
+                                face_value_pu, day_count="Actual/365", future_principal=None,
+                                coupon_day=None, coupon_dc=None, issue_date=None):
     """True money-weighted yield-to-cost for a whole position, robust to
     principal amortization and multiple purchases. Returned as a NOMINAL annual
     rate compounded at the coupon frequency, directly comparable to the coupon
@@ -311,25 +375,16 @@ def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
             elif tt in ('Interest_Receipt', 'Principal_Repayment'):
                 cfs.append((d, r['amount']))
 
-        # Anchor coupon projection at the units-weighted average buy date, not
-        # the first buy: when capital is deployed in staggered lots (e.g. a
-        # small lot, then a larger lot months later), projecting coupons on the
-        # full reconstructed balance from the earliest date would credit coupons
-        # on capital not yet invested and overstate the yield. (Single-lot
-        # positions collapse to the buy date, matching the bullet-bond YTC.)
-        buys_df = txns[txns['transaction_type'] == 'Buy']
-        bu = buys_df['units'].abs()
-        word = (bu * buys_df['trade_date'].apply(lambda x: pd.to_datetime(x).toordinal())).sum()
-        anchor = date.fromordinal(int(round(word / bu.sum()))) if bu.sum() > 0 else pd.to_datetime(buys_df['trade_date'].min()).date()
+        issue = pd.to_datetime(issue_date).date() if issue_date is not None and pd.notna(issue_date) else None
 
         # Project coupons only over the stretch the RECORDED receipts do not
         # already cover. Every Interest_Receipt above is already an inflow at
         # its actual date; projecting the same coupon again counted it twice
         # and inflated YTC by +703bps on a 4y annual payer with two receipts
-        # recorded. With no receipts on file the cutoff is the anchor, so a
-        # ledger that tracks only purchases is unaffected.
+        # recorded. With no receipts on file every coupon since the first buy is projected.
         rx = txns[txns['transaction_type'] == 'Interest_Receipt']
-        cutoff = anchor
+        first_buy = pd.to_datetime(txns[txns['transaction_type'] == 'Buy']['trade_date']).min().date()
+        cutoff = first_buy
         if not rx.empty:
             cutoff = max(cutoff, pd.to_datetime(rx['trade_date']).max().date())
 
@@ -340,33 +395,48 @@ def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
                 take = min(fa, left)
                 fut.append((fd, take))
                 left -= take
-        # A coupon accrues on the balance outstanding over its period, so a repayment made ON a coupon
-        # date does not reduce that coupon (3.3.1: 2.8.0 subtracted it first, `rd <= d`, which dropped a
-        # month of interest on every instalment and understated YTC on amortizers — Varthana 11.02% on
-        # projected coupons against 11.60% on the interest actually paid; 11.54% with this fix).
-        cds = _coupon_grid(mat, months, cutoff)
-        for d in sorted(cds):
-            bal = original_face - sum(a for rd, a in reps if rd < d) - sum(a for fd, a in fut if fd < d)
+
+        # Each coupon is paid on the bonds actually held on its date, at the face per bond that period
+        # carried — not on the whole position from an averaged buy date (3.5.0: a second lot bought
+        # weeks after the first was credited coupons for a period it was not held, +26bp on one
+        # position against the platform statement). The face per bond over a period is today's face
+        # plus the per-bond repayments recorded on or after its end, less the scheduled instalments
+        # still to come before it. A repayment ON a coupon date does not reduce that coupon (3.3.1).
+        lots = sorted((pd.to_datetime(r['trade_date']).date(), float(r['units']))
+                      for _, r in txns[txns['transaction_type'].isin(['Buy', 'Sell'])].iterrows())
+        steps = [(pd.to_datetime(r['trade_date']).date(), float(r['price']))
+                 for _, r in txns[txns['transaction_type'] == 'Principal_Repayment'].iterrows()]
+        fut_pu = [(fd, fa / cur_u) for fd, fa in fut]
+
+        def units_at(d):
+            return sum(u for td, u in lots if td < d)
+
+        def face_pu(d):
+            return face_value_pu + sum(pr for rd, pr in steps if rd >= d) - sum(a for fd, a in fut_pu if fd < d)
+
+        for ps, d in _coupon_periods(mat, months, cutoff, coupon_day, issue):
+            bal = units_at(d) * face_pu(d)
             if bal > 0:
-                cfs.append((d, bal * coupon_rate / freq))
+                cfs.append((d, _coupon(bal, coupon_rate, freq, ps, d, coupon_dc)))
         cfs.extend(fut)
         cfs.append((mat, left))  # redeem remaining principal at maturity
 
-        # The first projected coupon pays a FULL period even though the
-        # position was held for only part of it (the grid is maturity-anchored).
-        # Charge the unearned portion as an outflow at the cutoff — the
-        # standard dirty-price treatment. See accrued_at.
-        bal_at_cutoff = original_face - sum(a for rd, a in reps if rd <= cutoff)
-        acc = accrued_at(bal_at_cutoff, coupon_rate, frequency, maturity_str, cutoff, day_count)
-        if acc > 0:
-            cfs.append((cutoff, -acc))
+        # Each purchase pays the seller the interest accrued since the last coupon (and a sale receives
+        # it): the coupons above are full ones, so the dirty price is what they are solved against.
+        if rx.empty:
+            for td, u in lots:
+                acc = accrued_at(abs(u) * face_pu(td + relativedelta(days=1)), coupon_rate, frequency,
+                                 maturity_str, td, day_count, coupon_day, issue)
+                if acc > 0:
+                    cfs.append((td, -acc if u > 0 else acc))
 
         return _xirr(cfs, freq)
     except (ValueError, TypeError, ZeroDivisionError, FloatingPointError):
         return 0.0
 
 def generate_amortizing_schedule(outstanding, coupon_rate, frequency, maturity_str,
-                                 installment, period_months, as_of=None, principal_plan=None):
+                                 installment, period_months, as_of=None, principal_plan=None,
+                                 coupon_day=None, coupon_dc=None, issue_date=None):
     """Project an amortizing bond's remaining cashflows: coupons on the
     DECLINING balance plus principal installments on the inferred cadence,
     with any residual redeemed at maturity. `installment`/`period_months` are
@@ -417,8 +487,11 @@ def generate_amortizing_schedule(outstanding, coupon_rate, frequency, maturity_s
             residual = outstanding
         prin_by_date[mat] = prin_by_date.get(mat, 0.0) + residual
 
-        # Coupon dates from maturity back to anchor.
-        cds = sorted(_coupon_grid(mat, cmonths, anchor))
+        # Coupon dates from maturity back to anchor, each with the period it pays for.
+        periods = _coupon_periods(mat, cmonths, anchor, coupon_day,
+                                  pd.to_datetime(issue_date).date() if issue_date is not None and pd.notna(issue_date) else None)
+        start_of = {e: s for s, e in periods}
+        cds = [e for _s, e in periods]
 
         # Merge coupon and principal dates; coupon accrues on the balance
         # outstanding just before each date.
@@ -427,8 +500,8 @@ def generate_amortizing_schedule(outstanding, coupon_rate, frequency, maturity_s
         bal = outstanding
         for d in all_dates:
             coupon = 0.0
-            if d in cds:
-                coupon = bal * coupon_rate / freq
+            if d in start_of:
+                coupon = _coupon(bal, coupon_rate, freq, start_of[d], d, coupon_dc)
             prin = prin_by_date.get(d, 0.0)
             cfs.append({'date': d, 'coupon': coupon, 'principal': prin,
                         'total': coupon + prin,
@@ -444,7 +517,8 @@ def calc_days_to_maturity(s):
     except (ValueError, TypeError):
         return 0
 
-def generate_cashflow_schedule(fv_pu, coupon_rate, frequency, maturity_str, units=1, as_of=None):
+def generate_cashflow_schedule(fv_pu, coupon_rate, frequency, maturity_str, units=1, as_of=None,
+                               coupon_day=None, coupon_dc=None, issue_date=None):
     """Coupon schedule anchored to maturity, stepping back one period at a
     time, emitting every cashflow strictly after `as_of` (default: today).
     Passing the purchase date reconstructs the full original stream (used to
@@ -454,10 +528,10 @@ def generate_cashflow_schedule(fv_pu, coupon_rate, frequency, maturity_str, unit
         anchor = as_of if as_of is not None else date.today()
         freq = FREQ_MAP.get(frequency, 1)
         months = 12 // freq
-        cpn = fv_pu * coupon_rate / freq * units
-        dates = sorted(_coupon_grid(mat, months, anchor))
         cfs = []
-        for d in dates:
+        for s, d in _coupon_periods(mat, months, anchor, coupon_day,
+                                    pd.to_datetime(issue_date).date() if issue_date is not None and pd.notna(issue_date) else None):
+            cpn = _coupon(fv_pu * units, coupon_rate, freq, s, d, coupon_dc)
             prin = fv_pu * units if d == mat else 0
             cfs.append({'date': d, 'coupon': cpn, 'principal': prin, 'total': cpn + prin,
                         'type': 'Maturity + Coupon' if d == mat else 'Coupon'})

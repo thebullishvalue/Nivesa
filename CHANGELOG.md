@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.5.0] — 2026-11-24
+Audit of the bond maths against the four platform cashflow statements (about 2,000 actual and scheduled
+payments over 56 positions): principal matched to the rupee before and after; interest was off by
+Rs 23,078 (0.37%) and is now within Rs 1,658 of Rs 63.2 lakh (0.026%, issuer quirks); yield to cost agrees
+with the statements' own cashflows to 0.7bp on average (median 0.0bp).
+### Fixed
+- **Interest by actual days.** Coupons were a flat rate ÷ frequency. They are now each period's actual
+  days over the days in the year of payment (Actual/Actual, 366 in a leap year — the Indian NCD
+  convention, verified to the paisa), or the bond's own day count (Actual/365 for issuers that use it).
+- **The bond's interest day.** Coupons fell on the maturity date's day; many NCDs pay on the 1st, the
+  20th, month-end…, with a last, shorter payment at maturity. A new per-bond setting (`bond_terms`),
+  entered as **Payment terms** on Add and Edit Security, sets it; 18 bonds take it from their statements.
+- **No interest before issue.** The first period started at the grid date before the issue date (three
+  weeks of interest a bond never paid, on one position); it now starts at the issue date.
+- **Coupons per lot held.** A position bought in lots earned coupons on all of them from a units-weighted
+  average date; each coupon now counts the bonds held on its date and each purchase pays its own accrued
+  interest (+26bp on a two-lot position against its statement, now 0bp).
+- **Capital comes back when it is repaid.** The Maturity ladder put every bond's whole face at its final
+  maturity; it now places principal by when it is repaid (instalments on their dates), and the headline
+  is **average life** beside final maturity (book: 2.10y against 2.33y).
+- **A bond repaid in full leaves the book.** Once its last instalment was recorded it stayed a live
+  position with no face; it is now retired like a bond sold in full.
+### Changed
+- **Edit Security: Payment terms.** One form for the interest day and the repayment schedule; an empty
+  schedule means the bond repays at maturity (no separate "remove" step).
+- **Edit Transaction** shows the type without offering a change the save would reject, and a buy or sale
+  takes at least one bond. **Record Transaction** shows the scheduled instalment near the chosen date
+  when recording a principal repayment.
+- The golden values are now the original 2.8.0 page code run on the current engine
+  (`capture_golden.FIXES`); the maths is proved by `tests/test_bond_math.py` (statement rows reproduced
+  to the paisa) and the reconciliation above.
+
+---
+
 ## [3.4.0] — 2026-11-24
 ### Changed
 - **A bond and its repayment schedule are added together.** Add Security takes the schedule (optional;

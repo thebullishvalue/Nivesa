@@ -23,6 +23,7 @@ from core.formatting import fmt_inr
 from ui.components import render_note, render_section_header
 from ui.notices import form_error, form_warning, set_notification
 from ui.pages._forms import render_no_securities, render_terms, security_terms
+from core.schedule import MATCH_DAYS, schedules
 from ui.pages._schedule import render_due_repayments
 
 
@@ -95,6 +96,12 @@ def render_record_transaction_page():
                 st.checkbox("Confirm this price deviation is correct", key="confirm_price_rec")
         elif ttype == 'Principal_Repayment':
             current_units = units_by_account.get(account, 0.0)
+            # What the bond's schedule has due around this date (core.schedule), as a guide to the amount.
+            _due = [(d, a) for d, a in schedules().get(bid, []) if abs((d - tdate).days) <= MATCH_DAYS]
+            if _due:
+                d0, a0 = min(_due, key=lambda x: abs((x[0] - tdate).days))
+                render_note(f"Scheduled {d0:%d %b %Y}: {fmt_inr(a0)} per bond · {fmt_inr(a0 * current_units)} for "
+                            f"{current_units:.0f} bonds in {account}")
             amount = st.number_input("Total Amount", min_value=0.0, format="%.2f")
             if current_units > 0 and amount > 0:
                 render_note(f"Per unit (this account) {fmt_inr(amount / current_units)}")
