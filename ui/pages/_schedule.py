@@ -59,21 +59,8 @@ def render_schedule_editor(bid: str, sec, meta) -> None:
     with st.form("schedule_form"):
         lines = "\n".join(f"{pd.to_datetime(r['due_date']):%Y-%m-%d}, {r['principal_per_unit']:.2f}"
                           for _, r in cur.iterrows())
-        text = st.text_area("Instalments — one per line: date, ₹ per bond", value=lines, height=160,
-                            placeholder="2026-12-27, 1250\n2027-03-27, 1250",
-                            help="Dates as YYYY-MM-DD or DD-MM-YYYY. Amounts are rupees per bond against the "
-                                 "face at issue. Leave a bond's final instalment on its maturity date.")
-        q1, q2, q3, q4 = st.columns(4, gap="small")
-        with q1:
-            quick = st.checkbox("Fill equal instalments instead", key="sched_quick")
-        with q2:
-            first = st.date_input("First instalment", value=None, key="sched_first")
-        with q3:
-            every = st.selectbox("Every", list(_EVERY), index=1, key="sched_every")
-        with q4:
-            count = st.number_input("Instalments", min_value=1, max_value=120, value=4, step=1, key="sched_count")
-        source = st.text_input("Source", value=(cur["source"].iloc[0] if not cur.empty and cur["source"].iloc[0] else ""),
-                               placeholder="e.g. Key Information Document, platform repayment schedule")
+        fields = schedule_fields("sched", lines=lines,
+                                 source=cur["source"].iloc[0] if not cur.empty and cur["source"].iloc[0] else "")
         clear = st.checkbox("Remove this bond's schedule", key="sched_clear") if not cur.empty else False
         saved = st.form_submit_button("Save schedule", type="primary")
 
@@ -84,28 +71,55 @@ def render_schedule_editor(bid: str, sec, meta) -> None:
         set_notification(f"Schedule removed for **{sec['issuer']}**.", "success")
         st.rerun()
     try:
-        if quick:
-            if first is None:
-                form_error("Pick the date of the first instalment to fill equal instalments.")
-                st.stop()
-            rows = sch.equal_instalments(first, _EVERY[every], int(count), face)
-        else:
-            rows = sch.parse_lines(text)
+        rows = schedule_rows(fields, face)
     except ValueError as e:
         form_error(f"Schedule not saved: {e}.")
         st.stop()
     if not rows:
         form_error("No instalments to save. To remove the schedule, tick “Remove this bond's schedule”.")
         st.stop()
-    errors, warnings = sch.check(rows, face=face, issue=issue, maturity=maturity)
+    errors, warnings = sch.check(rows, face=float(sec["face_value"]), issue=issue, maturity=maturity)
     if errors:
         form_error("Schedule not saved: " + "; ".join(errors) + ".")
         st.stop()
     for w in warnings:
         form_warning(w[0].upper() + w[1:] + ".")
-    sch.replace_schedule(bid, rows, source=source.strip() or "entered")
+    sch.replace_schedule(bid, rows, source=fields["source"] or "entered")
     set_notification(f"Repayment schedule saved for **{sec['issuer']}**: {len(rows)} instalments.", "success")
     st.rerun()
+
+
+def schedule_fields(key: str, *, lines: str = "", source: str = "") -> dict:
+    """The schedule inputs, drawn inside the caller's form (Add Security and Edit Security share them):
+    instalment lines, the equal-instalments fill, and the source. Returns their values."""
+    text = st.text_area("One instalment per line: date, ₹ per bond", value=lines, height=140,
+                        key=f"{key}_lines", placeholder="2027-03-27, 2500\n2027-06-27, 2500",
+                        help="Leave empty for a bond that repays its whole face at maturity. Dates as YYYY-MM-DD "
+                             "or DD-MM-YYYY; amounts are rupees per bond (against the face at issue). Instalments "
+                             "still to come may not add up to more than the current face; any rest is repaid at "
+                             "maturity.")
+    q1, q2, q3, q4 = st.columns(4, gap="small")
+    with q1:
+        quick = st.checkbox("Fill equal instalments instead", key=f"{key}_quick")
+    with q2:
+        first = st.date_input("First instalment", value=None, key=f"{key}_first")
+    with q3:
+        every = st.selectbox("Every", list(_EVERY), index=1, key=f"{key}_every")
+    with q4:
+        count = st.number_input("Instalments", min_value=1, max_value=120, value=4, step=1, key=f"{key}_count")
+    src = st.text_input("Schedule source", value=source, key=f"{key}_source",
+                        placeholder="e.g. Key Information Document, platform repayment schedule")
+    return {"text": text, "quick": quick, "first": first, "every": every, "count": int(count), "source": src.strip()}
+
+
+def schedule_rows(fields: dict, face_at_issue: float) -> "list[tuple]":
+    """The instalments the fields describe: N equal parts of ``face_at_issue`` from the first date, or the
+    lines as typed (empty: no schedule). Raises ValueError with what to fix."""
+    if fields["quick"]:
+        if fields["first"] is None:
+            raise ValueError("pick the date of the first instalment to fill equal instalments")
+        return sch.equal_instalments(fields["first"], _EVERY[fields["every"]], fields["count"], face_at_issue)
+    return sch.parse_lines(fields["text"])
 
 
 def render_due_repayments() -> None:

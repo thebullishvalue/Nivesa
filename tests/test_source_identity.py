@@ -189,8 +189,16 @@ def _sub(text: str) -> str:
     return text
 
 
+#: Handlers deliberately changed since 2.8.0. 3.4.0: Add Security takes the repayment schedule — checked
+#: before the security is created and saved with it (tests/test_schedule.py covers it; the write-path tests
+#: still prove an add without a schedule leaves the book exactly as 2.8.0 did).
+AMENDED_HANDLERS = {"page_add_security"}
+
+
 @pytest.mark.parametrize("orig,rel,new,marker", HANDLERS)
 def test_form_handler_is_the_original(orig, rel, new, marker):
+    if orig in AMENDED_HANDLERS:
+        pytest.skip(f"{orig} is amended since 2.8.0 (see AMENDED_HANDLERS)")
     o = ORIG_FUNCS[orig]
     assert o.count(marker) == 1
     want = _sub(o[o.index(marker):])

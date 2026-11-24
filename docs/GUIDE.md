@@ -28,7 +28,7 @@ rail's foot. The book itself is on every page's command bar.
 | Operations | **Record Transaction** | Buy, Sell, Interest Receipt, Principal Repayment. |
 | | **Ledger** | The audit trail, filtered and windowed, with CSV and Excel export. |
 | | **Securities** | The securities master, with export. |
-| | **Add Security** · **Edit Security** · **Edit Transaction** | Maintain the master and correct the ledger. Edit Security holds the bond's **repayment schedule**. |
+| | **Add Security** · **Edit Security** · **Edit Transaction** | Maintain the master and correct the ledger. Both security forms take the bond's **repayment schedule**. |
 | | **Audit Trail** | Who changed what? Every add, edit and delete, newest first, with CSV export. |
 
 Account filters sit in a strip directly above the table or chart they filter.
@@ -73,7 +73,11 @@ Nivesa uses SQLite with three book tables and the audit trail:
 
 ### `redemption_schedule` — Contractual Principal Instalments
 One row per instalment a bond is due to pay, from its offer document or the platform it was bought on.
-Entered on **Edit Security → Repayment schedule** (lines of `date, ₹ per bond`, or N equal instalments).
+Entered with the bond on **Add Security**, or later on **Edit Security**: lines of `date, ₹ per bond`, or N
+equal instalments. Leave it empty for a bond that repays its whole face at maturity. The instalments
+still to come may not add up to more than the bond's current face (any rest is repaid at maturity), so a
+bond added part-way through its life takes its whole schedule, the instalments already behind it
+included.
 
 | Column | Type | Description |
 |--------|------|-------------|

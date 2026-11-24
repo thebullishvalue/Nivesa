@@ -121,8 +121,16 @@ def equal_instalments(first: date, every_months: int, count: int, total: float) 
     return out
 
 
-def check(rows, *, face: float, issue: "date | None", maturity: date) -> "tuple[list[str], list[str]]":
-    """``(errors, warnings)`` for a schedule against the bond's terms."""
+def check(rows, *, face: float, issue: "date | None", maturity: date,
+          today: "date | None" = None) -> "tuple[list[str], list[str]]":
+    """``(errors, warnings)`` for a schedule against the bond's terms.
+
+    ``face`` is the bond's CURRENT face per bond — the one figure both the Add and the Edit form know.
+    Instalments dated after ``today`` are what is still to be repaid, so they may not add up to more
+    than it; if they add up to less, the rest is repaid at maturity. Instalments on or before today
+    are already reflected in the current face (a bond added part-way through its life, or one whose
+    repayments are recorded), so only their dates and amounts are checked."""
+    today = today or date.today()
     errors, warnings = [], []
     if not rows:
         return errors, warnings
@@ -135,12 +143,13 @@ def check(rows, *, face: float, issue: "date | None", maturity: date) -> "tuple[
         errors.append(f"a date falls after maturity ({maturity:%d %b %Y})")
     if issue is not None and any(d <= issue for d in dates):
         errors.append(f"a date falls on or before the issue date ({issue:%d %b %Y})")
-    total = sum(a for _d, a in rows)
-    if face > 0 and total > face + 0.5:
-        errors.append(f"the instalments add up to ₹{total:,.2f}, more than the face of ₹{face:,.2f}")
-    elif face > 0 and abs(total - face) > 0.5:
-        warnings.append(f"the instalments add up to ₹{total:,.2f} of a ₹{face:,.2f} face; the remaining "
-                        f"₹{face - total:,.2f} is treated as repaid at maturity")
+    ahead = sum(a for d, a in rows if d > today)
+    if face > 0 and ahead > face + 0.5:
+        errors.append(f"the instalments still to come add up to ₹{ahead:,.2f}, more than the current face of "
+                      f"₹{face:,.2f}")
+    elif face > 0 and face - ahead > 0.5:
+        warnings.append(f"the instalments still to come add up to ₹{ahead:,.2f} of a ₹{face:,.2f} face; the "
+                        f"remaining ₹{face - ahead:,.2f} is treated as repaid at maturity")
     return errors, warnings
 
 

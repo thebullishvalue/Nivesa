@@ -72,15 +72,25 @@ def test_equal_instalments_sum_to_the_paisa():
 
 
 def test_checks_against_the_terms():
-    face, issue, mat = 10000.0, D(2025, 1, 1), D(2027, 1, 1)
+    face, issue, mat, today = 10000.0, D(2025, 1, 1), D(2027, 1, 1), D(2025, 6, 1)
     ok = [(D(2026, 1, 1), 5000.0), (D(2027, 1, 1), 5000.0)]
-    assert sch.check(ok, face=face, issue=issue, maturity=mat) == ([], [])
-    errs, _w = sch.check([(D(2027, 6, 1), 10000.0)], face=face, issue=issue, maturity=mat)
+    assert sch.check(ok, face=face, issue=issue, maturity=mat, today=today) == ([], [])
+    errs, _w = sch.check([(D(2027, 6, 1), 10000.0)], face=face, issue=issue, maturity=mat, today=today)
     assert any("after maturity" in e for e in errs)
-    errs, _w = sch.check([(D(2026, 1, 1), 6000.0), (D(2026, 6, 1), 6000.0)], face=face, issue=issue, maturity=mat)
-    assert any("more than the face" in e for e in errs)
-    errs, w = sch.check([(D(2026, 1, 1), 2500.0)], face=face, issue=issue, maturity=mat)
+    errs, _w = sch.check([(D(2026, 1, 1), 6000.0), (D(2026, 6, 1), 6000.0)], face=face, issue=issue, maturity=mat,
+                         today=today)
+    assert any("more than the current face" in e for e in errs)
+    errs, w = sch.check([(D(2026, 1, 1), 2500.0)], face=face, issue=issue, maturity=mat, today=today)
     assert not errs and "repaid at maturity" in w[0]
+
+
+def test_a_bond_part_way_through_its_life_is_checked_on_what_is_left():
+    """Bought after two of four 2,500 instalments: its face is 5,000 now, and the schedule — all four —
+    is right, because the two already paid are behind it."""
+    rows = [(D(2026, 3, 1), 2500.0), (D(2026, 6, 1), 2500.0), (D(2027, 3, 1), 2500.0), (D(2027, 6, 1), 2500.0)]
+    assert sch.check(rows, face=5000.0, issue=D(2025, 6, 1), maturity=D(2027, 6, 1), today=D(2026, 11, 24)) == ([], [])
+    errs, _w = sch.check(rows, face=2500.0, issue=D(2025, 6, 1), maturity=D(2027, 6, 1), today=D(2026, 11, 24))
+    assert any("more than the current face" in e for e in errs)
 
 
 # ── maths ────────────────────────────────────────────────────────────────────
@@ -218,7 +228,7 @@ def test_edit_security_saves_a_schedule_from_lines(app_book, apptest):
     box = next(s for s in at.selectbox if s.label == "Select Security")
     box.select(next(o for o in box.options if "Alder" in o)).run()
     assert not at.exception
-    ta = next(t for t in at.text_area if t.label.startswith("Instalments"))
+    ta = next(t for t in at.text_area if t.label.startswith("One instalment per line"))
     ta.input("2027-03-15, 500\n2028-03-15, 500")
     next(b for b in at.button if b.label == "Save schedule").click().run()
     assert not at.exception
@@ -233,7 +243,61 @@ def test_edit_security_rejects_a_schedule_past_maturity(app_book, apptest):
     _goto(at, "edit-security")
     box = next(s for s in at.selectbox if s.label == "Select Security")
     box.select(next(o for o in box.options if "Alder" in o)).run()
-    next(t for t in at.text_area if t.label.startswith("Instalments")).input("2030-01-01, 1000")
+    next(t for t in at.text_area if t.label.startswith("One instalment per line")).input("2030-01-01, 1000")
     next(b for b in at.button if b.label == "Save schedule").click().run()
     assert "after maturity" in " ".join(m.value for m in at.markdown)
     assert ALDER not in sch.schedules()
+
+
+# ── Add Security takes the schedule ─────────────────────────────────────────
+def _add(at, isin, *, lines="", quick=None):
+    _goto(at, "add-security")
+    ti = {t.label: t for t in at.text_input}
+    ti["Issuer Name"].input("Juniper Finance")
+    ti["ISIN"].input(isin)
+    next(d for d in at.date_input if d.label == "Maturity Date").set_value(D(2028, 6, 15))
+    next(n for n in at.number_input if n.label == "Face Value (per unit)").set_value(10000.0)
+    next(n for n in at.number_input if n.label == "Coupon Rate (%)").set_value(11.0)
+    if lines:
+        next(t for t in at.text_area if t.label.startswith("One instalment per line")).input(lines)
+    if quick:
+        first, every, count = quick
+        next(c for c in at.checkbox if c.label == "Fill equal instalments instead").check()
+        next(d for d in at.date_input if d.label == "First instalment").set_value(first)
+        next(s for s in at.selectbox if s.label == "Every").select(every)
+        next(n for n in at.number_input if n.label == "Instalments").set_value(count)
+    next(b for b in at.button if b.label == "Add security").click().run()
+    return " ".join(m.value for m in at.markdown)
+
+
+def _bid(isin):
+    r = core.db.db_query("SELECT bond_id FROM securities WHERE isin=?", (isin,))
+    return None if r.empty else r["bond_id"].iloc[0]
+
+
+def test_add_security_with_a_schedule_saves_both(app_book, apptest):
+    at = apptest().run()
+    md = _add(at, "INE999J07011", lines="2027-12-15, 5000\n2028-06-15, 5000")
+    assert not at.exception and "Juniper Finance" in md and "Repayment schedule: 2 instalments" in md
+    assert sch.schedules()[_bid("INE999J07011")] == [(D(2027, 12, 15), 5000.0), (D(2028, 6, 15), 5000.0)]
+
+
+def test_add_security_fills_equal_instalments(app_book, apptest):
+    at = apptest().run()
+    _add(at, "INE999J07029", quick=(D(2027, 9, 15), "Quarterly", 4))
+    assert sch.schedules()[_bid("INE999J07029")] == [(D(2027, 9, 15), 2500.0), (D(2027, 12, 15), 2500.0),
+                                                     (D(2028, 3, 15), 2500.0), (D(2028, 6, 15), 2500.0)]
+
+
+def test_add_security_with_a_bad_schedule_adds_nothing(app_book, apptest):
+    at = apptest().run()
+    md = _add(at, "INE999J07037", lines="2027-12-15, 8000\n2028-06-15, 8000")
+    assert "Security not added — repayment schedule" in md and "more than the current face" in md
+    assert _bid("INE999J07037") is None
+
+
+def test_add_security_without_a_schedule_is_a_bullet(app_book, apptest):
+    at = apptest().run()
+    md = _add(at, "INE999J07045")
+    assert "Juniper Finance" in md and "Repayment schedule:" not in md
+    assert _bid("INE999J07045") not in sch.schedules()

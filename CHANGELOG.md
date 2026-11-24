@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.4.0] — 2026-11-24
+### Changed
+- **A bond and its repayment schedule are added together.** Add Security takes the schedule (optional;
+  empty for a bond that repays at maturity), with the same fields as Edit Security — instalment lines or
+  N equal instalments — from one shared set of inputs. It is checked before the security is created, so
+  a bond is never saved without the schedule it was entered with.
+- **One check for both forms.** The schedule is checked against the bond's CURRENT face: the instalments
+  still to come may not add up to more than it, and any rest is repaid at maturity. Instalments already
+  behind the bond are reflected in its face, so a bond added part-way through its life takes its whole
+  schedule without the check mistaking the paid instalments for an excess.
+
+---
+
 ## [3.3.1] — 2026-11-24
 ### Fixed
 - **Yield to cost on bonds that repay in instalments.** The projected coupon on a date that also carried a

@@ -1,9 +1,11 @@
 """
 Nivesa — Operations · Add Security: register a bond in the securities master.
 
-The 2.8.0 form, restyled: a panel form, Tattva input wells, the one primary action. The submit handler
-(validation messages, the INSERTs, the notification) is the 2.8.0 handler verbatim — validation errors
-now land in the notice rail (``form_error``) instead of an ``st.error`` box.
+The 2.8.0 form, restyled: a panel form, Tattva input wells, the one primary action. Validation errors land
+in the notice rail (``form_error``) instead of an ``st.error`` box. Since 3.4.0 the form also takes the
+bond's repayment schedule (optional — empty for a bond that repays at maturity), checked BEFORE the
+security is created, so a bond and its schedule are saved together or not at all; the 2.8.0 validations
+and INSERTs are otherwise unchanged.
 """
 
 from __future__ import annotations
@@ -14,9 +16,11 @@ from datetime import date
 import streamlit as st
 
 from core.config import BOND_TYPES, CREDIT_RATINGS, DAY_COUNT_CONVENTIONS, FREQUENCIES, logger
+from core import schedule as sch
 from core.db import db_execute, db_query
-from ui.components import render_section_header
+from ui.components import render_section_header, render_sub_header
 from ui.notices import form_error, set_notification
+from ui.pages._schedule import schedule_fields, schedule_rows
 
 
 def render_add_security_page():
@@ -45,6 +49,9 @@ def render_add_security_page():
             dc = st.selectbox("Day Count", DAY_COUNT_CONVENTIONS)
 
         notes = st.text_area("Notes")
+
+        render_sub_header("Repayment schedule")
+        sched = schedule_fields("add_sched")
         submitted = st.form_submit_button("Add security", type="primary")
 
         if submitted:
@@ -56,7 +63,10 @@ def render_add_security_page():
                 form_error("Maturity date must be after the issue date.")
             elif not db_query("SELECT 1 FROM securities WHERE isin=?", (isin,)).empty:
                 form_error(f"ISIN **{isin}** already exists in the securities master.")
+            elif (bad := _schedule_problem(sched, fv, idate, mat)) is not None:
+                form_error(f"Security not added — repayment schedule: {bad}.")
             else:
+                rows = schedule_rows(sched, fv)
                 bid = str(uuid.uuid4())
                 ok = db_execute(
                     "INSERT INTO securities VALUES (?,?,?,?,?,?,?)",
@@ -69,6 +79,21 @@ def render_add_security_page():
                         "VALUES (?,?,?,?,?,?,?,?)",
                         (bid, btype, cr, dc, idate.isoformat() if idate else None, listing, sector, notes),
                     )
-                    set_notification(f"Security **{issuer}** ({isin}) added!", "success")
+                    if rows:
+                        sch.replace_schedule(bid, rows, source=sched["source"] or "entered")
+                        for w in sch.check(rows, face=fv, issue=idate, maturity=mat)[1]:
+                            set_notification(w[0].upper() + w[1:] + ".", "warning")
+                    set_notification(f"Security **{issuer}** ({isin}) added!"
+                                     + (f" Repayment schedule: {len(rows)} instalments." if rows else ""), "success")
                     logger.info(f"Added security: {isin}")
                     st.rerun()
+
+
+def _schedule_problem(fields: dict, face: float, issue, maturity) -> "str | None":
+    """Why the schedule in the form cannot be saved with this bond, or None (an empty schedule is fine)."""
+    try:
+        rows = schedule_rows(fields, face)
+    except ValueError as e:
+        return str(e)
+    errors, _warnings = sch.check(rows, face=face, issue=issue, maturity=maturity)
+    return "; ".join(errors) if errors else None
