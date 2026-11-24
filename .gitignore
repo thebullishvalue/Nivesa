@@ -32,10 +32,8 @@ Thumbs.db
 __MACOSX/
 
 # ── This repository ──────────────────────────────────────────────────────────────
-# The ledger does not belong in this repository: locally it is data/db/portfolio.db (ignored), hosted it
-# is kept in a private repository (see README → Keeping the ledger). Sidecars and downloads too.
-# (Until the private store holds it, the file is still tracked — force-added — so the hosted app keeps
-# its ledger; it is removed, with its history, once the store has its first copy.)
+# The ledger never lives in this repository: locally it is data/db/portfolio.db (ignored), hosted it is
+# kept in a private repository (see README → Keeping the ledger). Sidecars and downloads too.
 data/db/*.db
 data/db/*.db-wal
 data/db/*.db-shm

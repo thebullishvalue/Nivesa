@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.2.1] — 2026-11-24
+### Removed
+- **The ledger file leaves the repository, history included.** The private store now holds the ledger
+  (its first copy checked row for row against this repository's), so `data/db/portfolio.db` is no longer
+  tracked; the file, the old log files and the golden snapshots captured from the real ledger are
+  removed from every commit on every branch. The 3.0.25 system is kept, without its data, on
+  `archive/v3.0.25`.
+
+---
+
 ## [3.2.0] — 2026-11-24
 ### Changed
 - **The ledger moves to a private store.** The golden snapshot that carried the ledger's figures is
@@ -24,10 +34,6 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
   accounts, a pro-rata amortizer, interest receipts, a matured security. The golden snapshot is
   re-captured from the 2.8.0 code on it, so the golden, analytics and write-path tests run on every
   machine instead of skipping whenever the real ledger changed.
-### Note
-- The old ledger is still in this repository's git history. Make the repository private, or ask for the
-  history to be rewritten, to take it out of public view.
-
 ---
 
 ## [3.1.0] — 2026-11-24
