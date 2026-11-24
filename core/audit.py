@@ -23,7 +23,8 @@ from core.db import _connect
 from core.config import logger
 
 #: The tables whose every change is recorded, and the column that names a row.
-TRACKED = {"securities": "bond_id", "transactions": "transaction_id", "security_metadata": "bond_id"}
+TRACKED = {"securities": "bond_id", "transactions": "transaction_id", "security_metadata": "bond_id",
+           "redemption_schedule": "schedule_id"}
 
 _TABLE = """
 CREATE TABLE IF NOT EXISTS audit_log (

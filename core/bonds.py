@@ -251,7 +251,7 @@ def _xirr(cashflows, freq=1):
     return y
 
 def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
-                                face_value_pu, day_count="Actual/365"):
+                                face_value_pu, day_count="Actual/365", future_principal=None):
     """True money-weighted yield-to-cost for a whole position, robust to
     principal amortization and multiple purchases. Returned as a NOMINAL annual
     rate compounded at the coupon frequency, directly comparable to the coupon
@@ -270,7 +270,12 @@ def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
     outstanding (post-repayment) balance — driving YTC negative. Reconstructing
     the original face as `outstanding + total_repaid` and treating repayments
     as the inflows they are removes that error. For a plain bullet bond (no
-    repayments) this reduces exactly to the purchase-anchored bullet YTC."""
+    repayments) this reduces exactly to the purchase-anchored bullet YTC.
+
+    `future_principal` — [(date, amount)] for this position — is the bond's CONTRACTUAL schedule
+    still to come (core.schedule): each instalment is an inflow on its date and the coupon runs on
+    the balance left before it; what the schedule does not cover is redeemed at maturity. Without it
+    the whole outstanding principal is redeemed at maturity, as before."""
     try:
         freq = FREQ_MAP.get(frequency, 1)
         months = 12 // freq
@@ -328,12 +333,20 @@ def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
         if not rx.empty:
             cutoff = max(cutoff, pd.to_datetime(rx['trade_date']).max().date())
 
+        # the contractual instalments still to come, capped at what is outstanding
+        fut, left = [], outstanding
+        for fd, fa in sorted(future_principal or []):
+            if date.today() < fd < mat and fa > 0 and left > 1e-9:
+                take = min(fa, left)
+                fut.append((fd, take))
+                left -= take
         cds = _coupon_grid(mat, months, cutoff)
         for d in sorted(cds):
-            bal = original_face - sum(a for rd, a in reps if rd <= d)
+            bal = original_face - sum(a for rd, a in reps if rd <= d) - sum(a for fd, a in fut if fd < d)
             if bal > 0:
                 cfs.append((d, bal * coupon_rate / freq))
-        cfs.append((mat, outstanding))  # redeem remaining principal at maturity
+        cfs.extend(fut)
+        cfs.append((mat, left))  # redeem remaining principal at maturity
 
         # The first projected coupon pays a FULL period even though the
         # position was held for only part of it (the grid is maturity-anchored).
@@ -349,14 +362,18 @@ def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
         return 0.0
 
 def generate_amortizing_schedule(outstanding, coupon_rate, frequency, maturity_str,
-                                 installment, period_months, as_of=None):
+                                 installment, period_months, as_of=None, principal_plan=None):
     """Project an amortizing bond's remaining cashflows: coupons on the
     DECLINING balance plus principal installments on the inferred cadence,
     with any residual redeemed at maturity. `installment`/`period_months` are
     estimated from recorded repayment history; this is a projection, not a
     contractual schedule. Falls back to a bullet when no cadence is known
     (installment/period_months of 0), so this is the single projection entry
-    point for both amortizing and bullet positions."""
+    point for both amortizing and bullet positions.
+
+    `principal_plan` — [(date, amount)] — is the bond's CONTRACTUAL schedule (core.schedule), scaled
+    to this position. When given it replaces the inferred cadence: each instalment after `as_of` is
+    paid on its date (capped at what is outstanding) and any remainder at maturity."""
     try:
         mat = pd.to_datetime(maturity_str).date()
         anchor = as_of if as_of is not None else date.today()
@@ -372,7 +389,15 @@ def generate_amortizing_schedule(outstanding, coupon_rate, frequency, maturity_s
         # Future principal installment dates (inferred cadence), until balance
         # is exhausted or maturity is reached.
         prin_by_date = {}
-        if installment and installment > 0 and period_months and period_months > 0:
+        if principal_plan:
+            bal = outstanding
+            for d, amt in sorted(principal_plan):
+                if anchor < d < mat and amt > 0 and bal > 1e-9:
+                    pay = min(amt, bal)
+                    prin_by_date[d] = prin_by_date.get(d, 0.0) + pay
+                    bal -= pay
+            residual = max(0.0, bal)
+        elif installment and installment > 0 and period_months and period_months > 0:
             bal = outstanding
             guard = 1
             d = anchor + relativedelta(months=period_months)

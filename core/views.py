@@ -29,7 +29,7 @@ __all__ = [
     "maturity_ladder", "maturity_rows", "cashflow_projection", "cashflow_totals", "nearterm_cashflows",
     "issuer_detail", "ledger_tab", "ledger_page", "securities_master", "account_options",
     "allocation_by_bucket", "matured_mask", "maturing_soon", "tape_items", "command_bar", "book_notices",
-    "is_empty_book",
+    "is_empty_book", "due_repayment_notices",
     "FORWARD_WINDOW_MONTHS", "forward_window_end", "in_forward_window", "CONCENTRATION_CAUTION",
     "CONCENTRATION_DANGER", "concentration_tier", "top_issuers", "top_share", "next_maturities",
 ]
@@ -183,11 +183,12 @@ def cashflow_projection(df, cf_filter='All'):  # seam
         # the duration engine discounts. generate_amortizing_schedule steps
         # the balance down when a cadence was inferred and degenerates to a
         # bullet when it wasn't, so the two views can no longer diverge.
-        if p['principal_repaid'] > 0:
+        if p['principal_repaid'] > 0 or p.get('principal_plan'):
             has_amort = True
         schedule = generate_amortizing_schedule(
             p['position_face_value'], p['coupon_rate'], p['frequency'],
             p['maturity_date'], p['amort_installment'], p['amort_months'],
+            principal_plan=p.get('principal_plan'),
         )
         for cf in schedule:
             cf['issuer'] = p['issuer']
@@ -479,3 +480,17 @@ def book_notices(df) -> list[dict]:
                     f"{names}.",
         })
     return notices
+
+
+def due_repayment_notices() -> list[dict]:
+    """The rail's caveat for scheduled instalments past their date with nothing recorded (core.schedule)."""
+    from core.schedule import due_unrecorded
+    due = due_unrecorded(date.today())
+    if due.empty:
+        return []
+    per = due.groupby(["issuer", "isin"]).agg(n=("due_date", "nunique"), amt=("amount", "sum")).reset_index()
+    names = "; ".join(f"{r['issuer']} {r['isin']} ({r['n']} date{'s' if r['n'] != 1 else ''}, {fmt_inr(r['amt'])})"
+                      for _, r in per.iterrows())
+    return [{"kind": "warning", "title": "Repayments due",
+             "body": f"{fmt_inr(due['amount'].sum())} of scheduled principal has no entry: {names}. Check your "
+                     f"bank statement, then record them under Operations → Record Transaction."}]

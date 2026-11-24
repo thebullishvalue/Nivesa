@@ -17,6 +17,7 @@ from core.bonds import (
 )
 from core.config import FLOW_ORDER, FREQ_MAP
 from core.db import db_query
+from core.schedule import schedules as _schedules
 
 
 def get_positions_dataframe():
@@ -29,6 +30,7 @@ def get_positions_dataframe():
     txns['trade_date'] = pd.to_datetime(txns['trade_date'])
 
     meta = db_query("SELECT * FROM security_metadata")
+    plans = _schedules()      # contractual redemption schedules (core.schedule), per unit
     positions = []
 
     for (bid, acct), grp in txns.groupby(['bond_id', 'account']):
@@ -110,16 +112,20 @@ def get_positions_dataframe():
         # a bullet while the Cashflow tab projected the amortizing stream, so
         # the two disagreed by as much as ₹64k of principal on one position and
         # duration ran up to 357% too long.
+        # A contractual schedule, when the bond has one, replaces the cadence inferred above: the
+        # instalments still to come, scaled to this position's units.
+        plan = [(d, pu * cur_u) for d, pu in plans.get(bid, []) if d > date.today()] if bid in plans else None
         proj = generate_amortizing_schedule(
             face, si['coupon_rate'], si['frequency'], si['maturity_date'],
-            amort_installment, amort_months,
+            amort_installment, amort_months, principal_plan=plan,
         )
 
         # YTC = true money-weighted yield-to-cost over the position's actual
         # cashflows (repayments counted as inflows, coupons on the declining
         # balance). Seasoning-invariant; reduces to the bullet YTC when there is
         # no amortization.
-        ytc = calc_position_yield_to_cost(grp, si['coupon_rate'], si['frequency'], si['maturity_date'], si['face_value'], day_count)
+        ytc = calc_position_yield_to_cost(grp, si['coupon_rate'], si['frequency'], si['maturity_date'], si['face_value'], day_count,
+                                          future_principal=plan)
         # Duration is a TODAY risk metric: discount the REMAINING cashflows at a
         # today-anchored yield (best current-yield proxy absent a market mark).
         y_today = calc_yield_to_cost(face, cost, si['coupon_rate'], si['maturity_date'],
@@ -163,6 +169,7 @@ def get_positions_dataframe():
             'realized_pnl': r_pnl, 'interest_received': int_recv,
             'principal_repaid': prin_rep, 'position_face_value': face,
             'amort_installment': amort_installment, 'amort_months': amort_months,
+            'principal_plan': plan, 'has_schedule': bid in plans,
             'annual_coupon_income': ann_cpn, 'nominal_yield': si['coupon_rate'],
             'yield_to_cost': ytc, 'macaulay_duration': mac,
             'modified_duration': mod, 'days_to_maturity': dtm,

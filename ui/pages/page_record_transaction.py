@@ -23,6 +23,7 @@ from core.formatting import fmt_inr
 from ui.components import render_note, render_section_header
 from ui.notices import form_error, form_warning, set_notification
 from ui.pages._forms import render_no_securities, render_terms, security_terms
+from ui.pages._schedule import render_due_repayments
 
 
 def render_record_transaction_page():
@@ -33,6 +34,9 @@ def render_record_transaction_page():
     if secs.empty:
         render_no_securities("Record Transaction")
         return
+
+    # Instalments the redemption schedules say have fallen due, with nothing recorded yet.
+    render_due_repayments()
 
     opts = {f"{r['issuer']} — {r['isin']}": r['bond_id'] for _, r in secs.iterrows()}
     with st.container(key="filterbar"):

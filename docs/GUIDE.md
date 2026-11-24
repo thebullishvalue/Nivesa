@@ -28,7 +28,7 @@ rail's foot. The book itself is on every page's command bar.
 | Operations | **Record Transaction** | Buy, Sell, Interest Receipt, Principal Repayment. |
 | | **Ledger** | The audit trail, filtered and windowed, with CSV and Excel export. |
 | | **Securities** | The securities master, with export. |
-| | **Add Security** · **Edit Security** · **Edit Transaction** | Maintain the master and correct the ledger. |
+| | **Add Security** · **Edit Security** · **Edit Transaction** | Maintain the master and correct the ledger. Edit Security holds the bond's **repayment schedule**. |
 | | **Audit Trail** | Who changed what? Every add, edit and delete, newest first, with CSV export. |
 
 Account filters sit in a strip directly above the table or chart they filter.
@@ -70,6 +70,24 @@ Nivesa uses SQLite with three book tables and the audit trail:
 | day_count | TEXT | 30/360, Actual/365, etc. |
 | sector | TEXT | Financials, Infrastructure, etc. |
 | listing | TEXT | Unlisted/NSE/BSE/Both |
+
+### `redemption_schedule` — Contractual Principal Instalments
+One row per instalment a bond is due to pay, from its offer document or the platform it was bought on.
+Entered on **Edit Security → Repayment schedule** (lines of `date, ₹ per bond`, or N equal instalments).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| schedule_id | INTEGER PK | Increasing |
+| bond_id | TEXT FK | References securities |
+| due_date | TEXT | ISO date (unique per bond) |
+| principal_per_unit | REAL | Rupees per bond, against the face at issue |
+| source | TEXT | Where the schedule came from |
+
+With a schedule, the bond's projected principal, yield to cost and duration follow it; without one, the
+principal is projected at maturity (or on the pattern of repayments already recorded). An instalment
+whose date has passed with no repayment recorded (within 20 days) for an account that held the bond
+then is shown in the notice rail and on **Record Transaction**, where one button records them all —
+each through the same face step-down and balance check as the form.
 
 ### `audit_log` — Append-only Change Record
 Written by triggers on the three tables above; UPDATE and DELETE on it are refused.

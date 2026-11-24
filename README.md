@@ -6,7 +6,7 @@
 
 Bond Portfolio Ledger · Yield to Cost · Cashflows · Duration
 
-[![Version](https://img.shields.io/badge/version-3.2.1-2B5FD9)](CHANGELOG.md) [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](requirements.txt) [![Streamlit](https://img.shields.io/badge/streamlit-1.52.2-FF4B4B)](requirements.txt) [![License](https://img.shields.io/badge/license-proprietary-6B7280)](LICENSE) [![Pragyam Family](https://img.shields.io/badge/pragyam-family-0F1217)](#the-pragyam-family)
+[![Version](https://img.shields.io/badge/version-3.3.0-2B5FD9)](CHANGELOG.md) [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](requirements.txt) [![Streamlit](https://img.shields.io/badge/streamlit-1.52.2-FF4B4B)](requirements.txt) [![License](https://img.shields.io/badge/license-proprietary-6B7280)](LICENSE) [![Pragyam Family](https://img.shields.io/badge/pragyam-family-0F1217)](#the-pragyam-family)
 
 </div>
 
@@ -36,6 +36,8 @@ profiling and issuer concentration.
 - **Securities master** — type, rating, sector, listing, day count
 - **Transaction ledger** — the audit trail with filterable views and export
 - **Principal repayment** — face value steps down once per bond and date, pro rata across accounts
+- **Redemption schedules** — a bond's contractual instalments drive its cashflows, yield and duration;
+  instalments past due with nothing recorded are listed and recorded for every holding account in one step
 - **Audit trail** — every add, edit and delete recorded by the database itself, append-only
 - **Sign-in** — one shared password in front of the app (`NIVESA_PASSWORD` or `[auth] password`)
 

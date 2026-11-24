@@ -43,7 +43,12 @@ AMENDED = {
     # at a time — month-end maturities drifted to the 30th after the first 30-day month.
     "core/bonds.py": {"prev_coupon_date", "calc_position_yield_to_cost", "generate_amortizing_schedule",
                       "generate_cashflow_schedule"},
+    # 3.3.0: a bond's contractual redemption schedule (core.schedule), when it has one, drives the
+    # projected principal and the yield to cost; with none, the 2.8.0 path runs unchanged.
+    "core/book.py": {"get_positions_dataframe"},
 }
+#: Lifted views deliberately changed since (3.3.0: the cashflow projection passes the schedule on).
+AMENDED_VIEWS = {"cashflow_projection"}
 #: Original functions that drew the 2.8.0 UI and are replaced by the Graphite shell and components.
 RETIRED = {"load_css", "show_notifications", "rating_badge", "_render_metric", "_render_html_table", "page_dashboard",
            "get_icon", "_render_section_header", "page_add_security", "page_edit_security",
@@ -134,6 +139,9 @@ LIFTED = ["add_weight_columns", "account_options", "capital_allocation", "issuer
 
 @pytest.mark.parametrize("name", LIFTED)
 def test_lifted_view_statements_are_verbatim(name):
+    if name in AMENDED_VIEWS:
+        pytest.skip(f"{name} is amended since 2.8.0 (see AMENDED_VIEWS); its output is checked by the golden "
+                    f"and schedule tests")
     src, tree = _module("core/views.py")
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
     orig_lines = {ln.strip() for ln in ORIG_SRC.splitlines()}

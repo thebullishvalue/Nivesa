@@ -1,0 +1,143 @@
+"""
+Nivesa — the redemption schedule in the Operations pages.
+
+  · ``render_schedule_editor`` (Edit Security): the bond's contractual instalments — what it pays back,
+    when, per bond — with what has been paid, what is due and not recorded, and what is to come; entered
+    as lines (``date, ₹ per bond``) or filled as N equal instalments, checked against the bond's terms.
+  · ``render_due_repayments`` (Record Transaction): every scheduled instalment whose date has passed
+    with no repayment recorded for an account that held the bond then — recorded for all of them, or for
+    one security, in one step.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+
+import pandas as pd
+import streamlit as st
+
+from core import schedule as sch
+from core.formatting import fmt_inr
+from ui.components import render_note, render_sub_header, render_table_panel
+from ui.notices import form_error, form_warning, set_notification
+
+_EVERY = {"Monthly": 1, "Quarterly": 3, "Half-yearly": 6, "Yearly": 12}
+
+
+def render_schedule_editor(bid: str, sec, meta) -> None:
+    render_sub_header("Repayment schedule")
+    face = sch.original_face(bid)
+    maturity = pd.to_datetime(sec["maturity_date"]).date()
+    issue = pd.to_datetime(meta["issue_date"]).date() if meta is not None and pd.notna(meta["issue_date"]) else None
+    cur = sch.schedule_frame(bid)
+    due = sch.due_unrecorded()
+    due = due[due["bond_id"] == bid] if not due.empty else due
+
+    if cur.empty:
+        render_note(f"No schedule: the whole face (₹{face:,.2f} per bond at issue) is treated as repaid at maturity, "
+                    f"or on the pattern of the repayments already recorded. If this bond repays in instalments, "
+                    f"enter them below from its offer document or the platform it was bought on.")
+    else:
+        today = date.today()
+        due_dates = set(due["due_date"]) if not due.empty else set()
+        view = pd.DataFrame({
+            "due": pd.to_datetime(cur["due_date"]),
+            "per_bond": cur["principal_per_unit"],
+            "share": cur["principal_per_unit"] / face if face else 0.0,
+            "status": [("Due, not recorded" if pd.to_datetime(d).date() in due_dates else
+                        ("Recorded" if pd.to_datetime(d).date() <= today else "To come")) for d in cur["due_date"]],
+        })
+        total = float(cur["principal_per_unit"].sum())
+        render_table_panel(
+            view, "schedule", context=f"REDEMPTION SCHEDULE · {len(view)} instalments · ₹{total:,.2f} of ₹{face:,.2f} "
+                                      f"per bond · {cur['source'].iloc[0] or 'entered'}",
+            max_height=360, label_col="due",
+            col_labels={"due": "Due", "per_bond": "Per bond", "share": "Of face", "status": "Status"},
+            col_format={"per_bond": fmt_inr, "share": lambda v: f"{v:.2%}"},
+        )
+
+    with st.form("schedule_form"):
+        lines = "\n".join(f"{pd.to_datetime(r['due_date']):%Y-%m-%d}, {r['principal_per_unit']:.2f}"
+                          for _, r in cur.iterrows())
+        text = st.text_area("Instalments — one per line: date, ₹ per bond", value=lines, height=160,
+                            placeholder="2026-12-27, 1250\n2027-03-27, 1250",
+                            help="Dates as YYYY-MM-DD or DD-MM-YYYY. Amounts are rupees per bond against the "
+                                 "face at issue. Leave a bond's final instalment on its maturity date.")
+        q1, q2, q3, q4 = st.columns(4, gap="small")
+        with q1:
+            quick = st.checkbox("Fill equal instalments instead", key="sched_quick")
+        with q2:
+            first = st.date_input("First instalment", value=None, key="sched_first")
+        with q3:
+            every = st.selectbox("Every", list(_EVERY), index=1, key="sched_every")
+        with q4:
+            count = st.number_input("Instalments", min_value=1, max_value=120, value=4, step=1, key="sched_count")
+        source = st.text_input("Source", value=(cur["source"].iloc[0] if not cur.empty and cur["source"].iloc[0] else ""),
+                               placeholder="e.g. Key Information Document, platform repayment schedule")
+        clear = st.checkbox("Remove this bond's schedule", key="sched_clear") if not cur.empty else False
+        saved = st.form_submit_button("Save schedule", type="primary")
+
+    if not saved:
+        return
+    if clear:
+        sch.replace_schedule(bid, [])
+        set_notification(f"Schedule removed for **{sec['issuer']}**.", "success")
+        st.rerun()
+    try:
+        if quick:
+            if first is None:
+                form_error("Pick the date of the first instalment to fill equal instalments.")
+                st.stop()
+            rows = sch.equal_instalments(first, _EVERY[every], int(count), face)
+        else:
+            rows = sch.parse_lines(text)
+    except ValueError as e:
+        form_error(f"Schedule not saved: {e}.")
+        st.stop()
+    if not rows:
+        form_error("No instalments to save. To remove the schedule, tick “Remove this bond's schedule”.")
+        st.stop()
+    errors, warnings = sch.check(rows, face=face, issue=issue, maturity=maturity)
+    if errors:
+        form_error("Schedule not saved: " + "; ".join(errors) + ".")
+        st.stop()
+    for w in warnings:
+        form_warning(w[0].upper() + w[1:] + ".")
+    sch.replace_schedule(bid, rows, source=source.strip() or "entered")
+    set_notification(f"Repayment schedule saved for **{sec['issuer']}**: {len(rows)} instalments.", "success")
+    st.rerun()
+
+
+def render_due_repayments() -> None:
+    due = sch.due_unrecorded()
+    if due.empty:
+        return
+    render_sub_header("Scheduled repayments not recorded")
+    n_b = due["bond_id"].nunique()
+    render_note(f"{len(due)} instalment entr{'ies' if len(due) != 1 else 'y'} across {n_b} securit{'ies' if n_b != 1 else 'y'} "
+                f"({fmt_inr(due['amount'].sum())}) are past their scheduled date with no repayment recorded for an account "
+                f"that held the bond then. Check each against your bank statement, then record them here.")
+    view = due.assign(due_date=pd.to_datetime(due["due_date"]))[
+        ["issuer", "isin", "due_date", "account", "units", "principal_per_unit", "amount"]]
+    render_table_panel(
+        view.reset_index(drop=True), "due-repayments",
+        context=f"DUE, NOT RECORDED · {len(view)} entries · {fmt_inr(due['amount'].sum())}",
+        max_height=360, label_col="issuer",
+        col_labels={"issuer": "Issuer", "isin": "ISIN", "due_date": "Due", "account": "Account", "units": "Bonds",
+                    "principal_per_unit": "Per bond", "amount": "Amount"},
+        col_format={"principal_per_unit": fmt_inr, "amount": fmt_inr, "units": lambda v: f"{v:,.0f}"},
+    )
+    groups = {f"{r.issuer} — {r.isin}": r.bond_id for r in due.drop_duplicates("bond_id").itertuples()}
+    with st.container(key="filterbar-due"):
+        c1, c2 = st.columns([3, 1], gap="small")
+        with c1:
+            pick = st.selectbox("Record for", ["All securities above", *groups], key="due_pick")
+        with c2:
+            go = st.button("Record repayments", type="primary", width="stretch", key="due_record")
+    if go:
+        rows = due if pick == "All securities above" else due[due["bond_id"] == groups[pick]]
+        ok, msg = sch.record_due(rows)
+        if ok:
+            set_notification(f"Scheduled repayments: {msg}.", "success")
+            st.rerun()
+        form_error(f"Not recorded: {msg}.")

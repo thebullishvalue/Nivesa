@@ -35,6 +35,7 @@ from core.config import (  # noqa: E402
 )
 from core.audit import audit_init  # noqa: E402
 from core.db import db_init  # noqa: E402
+from core.schedule import schedule_init  # noqa: E402
 from ui import book, storage  # noqa: E402
 from ui.components import (  # noqa: E402
     WINDOWS, render_header, render_kpi_strip, render_nav_brand, render_section_header,
@@ -330,6 +331,7 @@ def main() -> None:
         st.session_state["active_target"] = SCOPE
         st.session_state.pop("_notice_slot", None)      # a slot belongs to the run that made it
         db_init()
+        schedule_init()             # before audit_init, so the trail covers the schedule too
         global _AUDIT_OK
         _AUDIT_OK = audit_init()
         ctx = book.shell_context()

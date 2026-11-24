@@ -17,6 +17,7 @@ from core.formatting import fmt_inr, fmt_pct
 from ui.components import render_note, render_section_header
 from ui.notices import form_error, form_warning, set_notification
 from ui.pages._forms import _safe_index, render_no_securities, render_terms
+from ui.pages._schedule import render_schedule_editor
 
 
 def render_edit_security_page():
@@ -59,6 +60,9 @@ def render_edit_security_page():
         ("Coupon", fmt_pct(sec['coupon_rate'])), ("Face / unit", fmt_inr(sec['face_value'])),
         ("Maturity", f"{mat_str} · {dtm}d"), ("Transactions", str(int(txn_count))), ("Holdings", holders),
     ])
+
+    # The bond's contractual instalments sit with its terms, above the form that corrects them.
+    render_schedule_editor(bid, sec, meta)
 
     listing_opts = ["Unlisted", "NSE", "BSE", "Both"]
 

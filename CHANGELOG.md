@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.3.0] — 2026-11-24
+### Added
+- **Redemption schedules.** Many of the book's NCDs repay principal in instalments; the ledger knew only
+  the repayments already recorded, and projected the rest from their pattern — wrongly when one had been
+  recorded (a bond with one ₹2,500 quarterly instalment on file was projected to repay ₹2,500 every
+  month). A bond's contractual schedule (date, ₹ per bond) is now kept in `redemption_schedule`, entered
+  on Edit Security as lines or as N equal instalments, checked against its face, issue date and maturity,
+  and covered by the audit trail. When a bond has one, its projected principal, cashflows, yield to cost
+  and duration follow it, and the remainder (if any) is redeemed at maturity.
+- **Repayments due.** An instalment past its date with no repayment recorded for an account that held
+  the bond then is listed in the notice rail and on Record Transaction, where one button records them
+  for every such account (or for one security) in one transaction, through the face step-down and the
+  chronology check.
+### Changed
+- The positions frame carries `principal_plan` and `has_schedule`; `get_positions_dataframe` and the
+  cashflow projection are listed as amended in the source-identity test. Bonds without a schedule are
+  computed exactly as before (the golden tests still match 2.8.0).
+
+---
+
 ## [3.2.1] — 2026-11-24
 ### Removed
 - **The ledger file leaves the repository, history included.** The private store now holds the ledger

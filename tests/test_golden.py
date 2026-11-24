@@ -71,9 +71,15 @@ def test_clock_is_frozen(book):
     assert core.views.date.today() == AS_OF and FrozenDatetime.now().date() == AS_OF
 
 
+#: Columns the positions engine gained after 2.8.0 (3.3.0: the redemption schedule). The sample book has
+#: no schedule, so they hold None / False; every 2.8.0 column is still compared exactly.
+NEW_POSITION_COLUMNS = ["principal_plan", "has_schedule"]
+
+
 def test_positions_frame_and_totals(book):
     df, totals = book
-    assert_records(frame_records(df), GOLDEN["positions"]["rows"], "positions")
+    assert df["principal_plan"].isna().all() and not df["has_schedule"].any()
+    assert_records(frame_records(df.drop(columns=NEW_POSITION_COLUMNS)), GOLDEN["positions"]["rows"], "positions")
     exp = GOLDEN["positions"]["totals"]
     assert set(totals) == set(exp)
     for k, v in exp.items():
@@ -105,7 +111,7 @@ def test_dashboard_aggregates_per_account_filter(book, flt):
 
     assert_records(frame_records(issuer_concentration(df, flt)), g["concentration"], f"{flt}.concentration")
     pos = positions_table(df, flt)
-    assert_records(frame_records(pos), g["positions"], f"{flt}.positions")
+    assert_records(frame_records(pos.drop(columns=NEW_POSITION_COLUMNS)), g["positions"], f"{flt}.positions")
     assert_records(frame_records(positions_export(pos)), g["positions_export"], f"{flt}.positions_export")
 
     mat_df, buckets = maturity_ladder(df, flt)

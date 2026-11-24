@@ -70,7 +70,7 @@ def _shell(sig: tuple):  # noqa: ARG001 — the cache key
     return {
         "tape": views.tape_items(df),
         "bar": views.command_bar(df, totals),
-        "notices": views.book_notices(df),
+        "notices": views.book_notices(df) + views.due_repayment_notices(),
         "empty": views.is_empty_book(df),
     }
 
