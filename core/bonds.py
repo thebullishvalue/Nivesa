@@ -17,6 +17,21 @@ from dateutil.relativedelta import relativedelta
 from core.config import FREQ_MAP
 
 
+def _coupon_grid(maturity, months, after):
+    """Coupon dates strictly after `after`, newest first: maturity, maturity - 1 period, ...
+
+    Each date is measured from MATURITY (k periods back), never from the previous date. Stepping
+    one period at a time let a month-end date stick to a shorter month's last day: a monthly bond
+    maturing on the 31st drifted to the 30th for every month after the first November it met."""
+    dates, k = [], 0
+    d = maturity
+    while d > after:
+        dates.append(d)
+        k += 1
+        d = maturity - relativedelta(months=months * k)
+    return dates
+
+
 def day_count_fraction(start_date, end_date, convention="Actual/365"):
     try:
         sd = pd.to_datetime(start_date).date()
@@ -54,10 +69,12 @@ def prev_coupon_date(maturity_str, frequency, as_of):
     """The coupon date on or immediately before `as_of`, walking the schedule
     back from maturity — the same maturity-anchored grid every projection in
     this module uses."""
-    d = pd.to_datetime(maturity_str).date()
+    mat = pd.to_datetime(maturity_str).date()
     months = 12 // FREQ_MAP.get(frequency, 1)
+    k, d = 0, mat
     while d > as_of:
-        d -= relativedelta(months=months)
+        k += 1
+        d = mat - relativedelta(months=months * k)
     return d
 
 def accrued_at(balance, coupon_rate, frequency, maturity_str, as_of, day_count="Actual/365"):
@@ -311,10 +328,7 @@ def calc_position_yield_to_cost(txns, coupon_rate, frequency, maturity_str,
         if not rx.empty:
             cutoff = max(cutoff, pd.to_datetime(rx['trade_date']).max().date())
 
-        cds, dd = [], mat
-        while dd > cutoff:
-            cds.append(dd)
-            dd -= relativedelta(months=months)
+        cds = _coupon_grid(mat, months, cutoff)
         for d in sorted(cds):
             bal = original_face - sum(a for rd, a in reps if rd <= d)
             if bal > 0:
@@ -360,25 +374,22 @@ def generate_amortizing_schedule(outstanding, coupon_rate, frequency, maturity_s
         prin_by_date = {}
         if installment and installment > 0 and period_months and period_months > 0:
             bal = outstanding
+            guard = 1
             d = anchor + relativedelta(months=period_months)
-            guard = 0
-            while d < mat and bal > 1e-6 and guard < 600:
+            while d < mat and bal > 1e-6 and guard <= 600:
                 pay = min(installment, bal)
                 prin_by_date[d] = prin_by_date.get(d, 0.0) + pay
                 bal -= pay
-                d += relativedelta(months=period_months)
                 guard += 1
+                # measured from the anchor, not the previous date (see _coupon_grid)
+                d = anchor + relativedelta(months=period_months * guard)
             residual = max(0.0, bal)
         else:
             residual = outstanding
         prin_by_date[mat] = prin_by_date.get(mat, 0.0) + residual
 
         # Coupon dates from maturity back to anchor.
-        cds, d = [], mat
-        while d > anchor:
-            cds.append(d)
-            d -= relativedelta(months=cmonths)
-        cds = sorted(cds)
+        cds = sorted(_coupon_grid(mat, cmonths, anchor))
 
         # Merge coupon and principal dates; coupon accrues on the balance
         # outstanding just before each date.
@@ -415,12 +426,7 @@ def generate_cashflow_schedule(fv_pu, coupon_rate, frequency, maturity_str, unit
         freq = FREQ_MAP.get(frequency, 1)
         months = 12 // freq
         cpn = fv_pu * coupon_rate / freq * units
-        dates = []
-        d = mat
-        while d > anchor:
-            dates.append(d)
-            d -= relativedelta(months=months)
-        dates.sort()
+        dates = sorted(_coupon_grid(mat, months, anchor))
         cfs = []
         for d in dates:
             prin = fv_pu * units if d == mat else 0

@@ -1,7 +1,7 @@
 """
 The app, end to end through Streamlit's AppTest (1.52.2), against a throwaway copy of the book:
 
-  · navigation is exactly the eleven pages, in the specified order and sections, Overview default;
+  · navigation is exactly the twelve pages, in the specified order and sections, Overview default;
   · every registered page renders with zero exceptions, under the page shell (tape → command bar →
     notice rail), opening with its own section header, with no "nan"/"None" text and none of the
     retired disclosure widgets (rule 133: no expander, tabs, caption, info/warning/success/error box,
@@ -24,17 +24,19 @@ APP = str(REPO / "app.py")
 NAV = [("", "Overview"), ("Analytics", "Positions"), ("Analytics", "Cashflows"), ("Analytics", "Maturity"),
        ("Analytics", "Issuers"), ("Operations", "Record Transaction"), ("Operations", "Ledger"),
        ("Operations", "Securities"), ("Operations", "Add Security"), ("Operations", "Edit Security"),
-       ("Operations", "Edit Transaction")]
+       ("Operations", "Edit Transaction"), ("Operations", "Audit Trail")]
 ICONS = [":material/dashboard:", ":material/table_rows:", ":material/payments:", ":material/event:",
          ":material/domain:", ":material/add_card:", ":material/receipt_long:", ":material/inventory_2:",
-         ":material/library_add:", ":material/edit_note:", ":material/edit:"]
+         ":material/library_add:", ":material/edit_note:", ":material/edit:",
+         ":material/history:"]
 FIRST_HEADER = {"overview": "Capital Allocation", "positions": "Positions — What Exactly Do We Hold?",
                 "cashflows": "Cashflows — What Comes In, and When?",
                 "maturity": "Maturity — When Does Capital Come Back?",
                 "issuers": "Issuers — Where Is the Book Concentrated?",
                 "record-transaction": "Record Transaction", "ledger": "The Ledger",
                 "securities": "Securities Master", "add-security": "Add Security",
-                "edit-security": "Edit Security", "edit-transaction": "Edit Transaction"}
+                "edit-security": "Edit Security", "edit-transaction": "Edit Transaction",
+                "audit": "Audit Trail"}
 PICKERS = {"record-transaction": "Select Security", "edit-security": "Select Security",
            "edit-transaction": "Select Transaction"}
 

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.1.0] — 2026-11-24
+### Fixed
+- **Coupon dates on month-end maturities.** The coupon grid stepped back from maturity one period at a
+  time, so a date that met a shorter month stayed short: a monthly bond maturing on the 31st paid on the
+  30th of every 31-day month before the first November it crossed. Each date is now measured from maturity
+  (k periods back), and amortization dates from their anchor, so the previous coupon date, accrued
+  interest, the projected cashflows and the yield all land on the real dates. Four functions in
+  `core/bonds.py` change and are listed as amended in the source-identity test.
+### Added
+- **Sign-in.** Set `NIVESA_PASSWORD` (environment) or `[auth] password` (Streamlit secrets) and the app
+  shows only a password form until it is given; "Sign out" sits in the rail. Compared in constant time,
+  with a growing wait after three wrong tries in a session. With no password set the app runs open, as
+  before, and the notice rail says so on every page.
+- **Audit trail.** Every insert, update and delete on `securities`, `transactions` and
+  `security_metadata` is written to an append-only `audit_log` table by SQLite triggers (the row as it
+  was and as it became, in JSON, with the UTC time), so no write path can skip it; the table refuses
+  UPDATE and DELETE. A new **Operations → Audit Trail** page lists the newest 500 changes in words, with
+  a CSV export of the whole trail.
+- **Bond maths tests** (`tests/test_bond_math.py`): day counts, the coupon grid, schedules, yield to cost,
+  XIRR, Macaulay and modified duration and accrued interest against textbook answers, independent of the
+  book on disk (the golden tests skip whenever the book changes). Audit and sign-in tests in
+  `tests/test_audit.py`.
+
+---
+
 ## [3.0.25] — 2026-11-24
 ### Fixed
 - **Help icons show on Paper.** A widget's (?) is a ring that Streamlit strokes with its own colour, near-white at

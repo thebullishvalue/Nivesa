@@ -36,6 +36,14 @@ MOVED = {
     "ui/notices.py": ["set_notification"],
     "ui/pages/_forms.py": ["_safe_index"],
 }
+#: Moved functions deliberately changed since the move, each with the fix that changed it. They are
+#: still checked to exist; ``tests/test_bond_math.py`` checks what they compute instead.
+AMENDED = {
+    # 3.1.0: the coupon grid is measured from maturity (k periods back), not stepped one period
+    # at a time — month-end maturities drifted to the 30th after the first 30-day month.
+    "core/bonds.py": {"prev_coupon_date", "calc_position_yield_to_cost", "generate_amortizing_schedule",
+                      "generate_cashflow_schedule"},
+}
 #: Original functions that drew the 2.8.0 UI and are replaced by the Graphite shell and components.
 RETIRED = {"load_css", "show_notifications", "rating_badge", "_render_metric", "_render_html_table", "page_dashboard",
            "get_icon", "_render_section_header", "page_add_security", "page_edit_security",
@@ -77,6 +85,9 @@ def test_moved_function_is_byte_identical(rel, name):
     src, tree = _module(rel)
     new = _functions(src, tree)
     assert name in new, f"{name} missing from {rel}"
+    if name in AMENDED.get(rel, ()):
+        assert new[name] != ORIG_FUNCS[name], f"{rel}:{name} is listed as amended but is the original"
+        return
     assert new[name] == ORIG_FUNCS[name], f"{rel}:{name} differs from the 2.8.0 original"
 
 

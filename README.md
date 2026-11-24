@@ -6,7 +6,7 @@
 
 Bond Portfolio Ledger · Yield to Cost · Cashflows · Duration
 
-[![Version](https://img.shields.io/badge/version-3.0.25-2B5FD9)](CHANGELOG.md) [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](requirements.txt) [![Streamlit](https://img.shields.io/badge/streamlit-1.52.2-FF4B4B)](requirements.txt) [![License](https://img.shields.io/badge/license-proprietary-6B7280)](LICENSE) [![Pragyam Family](https://img.shields.io/badge/pragyam-family-0F1217)](#the-pragyam-family)
+[![Version](https://img.shields.io/badge/version-3.1.0-2B5FD9)](CHANGELOG.md) [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](requirements.txt) [![Streamlit](https://img.shields.io/badge/streamlit-1.52.2-FF4B4B)](requirements.txt) [![License](https://img.shields.io/badge/license-proprietary-6B7280)](LICENSE) [![Pragyam Family](https://img.shields.io/badge/pragyam-family-0F1217)](#the-pragyam-family)
 
 </div>
 
@@ -36,6 +36,8 @@ profiling and issuer concentration.
 - **Securities master** — type, rating, sector, listing, day count
 - **Transaction ledger** — the audit trail with filterable views and export
 - **Principal repayment** — face value steps down once per bond and date, pro rata across accounts
+- **Audit trail** — every add, edit and delete recorded by the database itself, append-only
+- **Sign-in** — one shared password in front of the app (`NIVESA_PASSWORD` or `[auth] password`)
 
 ## Quick Start
 
@@ -51,6 +53,16 @@ it.
 The app opens on an empty book: add a security under **Operations**, then record its purchase.
 Set `NIVESA_DATA_DIR` to keep the database somewhere other than `data/`.
 
+**Anywhere other people can reach the app, set a password** — in `.streamlit/secrets.toml` (never
+committed) or the host's secrets panel:
+
+```toml
+[auth]
+password = "a long passphrase"
+```
+
+or as the environment variable `NIVESA_PASSWORD`. Without one, every page and form is open.
+
 ## Testing
 
 ```bash
@@ -59,6 +71,9 @@ python -m pytest -q
 ```
 
 The suite runs offline on temporary copies of `data/` and never touches the live database:
+- **Bond maths** — day counts, coupon grid, yield to cost, XIRR, duration and accrued interest against
+  textbook answers, independent of the book.
+- **Audit and sign-in** — every change is recorded, the trail is append-only, the password gates the app.
 - **Golden book** — every number the 2.8.0 app displayed, captured from the original code with
   the date frozen, reproduced exactly by the refactored code (skips with a re-capture command if
   the database changes).
@@ -75,14 +90,15 @@ nivesa/
 ├── core/                  # The ledger — unchanged logic from 2.8.0
 │   ├── config.py          #   constants (accounts, frequencies, types, ratings, version)
 │   ├── db.py              #   SQLite layer, migrations, chronology and face-adjustment checks
+│   ├── audit.py           #   the append-only audit trail (SQLite triggers)
 │   ├── bonds.py           #   accrued interest, duration, yield to cost, schedules
 │   ├── book.py            #   positions engine, ledger frame
 │   ├── formatting.py      #   ₹ formatting (Indian grouping), percentages
 │   └── views.py           #   the page aggregates and the shell's figures (pure)
 ├── ui/                    # Graphite design system + one module per page
-│   ├── theme.css · theme.py · palette.py · components.py · notices.py · book.py
+│   ├── theme.css · theme.py · palette.py · components.py · notices.py · book.py · auth.py
 │   └── pages/             #   page_overview … page_edit_transaction
-├── tests/                 # golden book, source identity, write paths, pages, app
+├── tests/                 # bond maths, audit, golden book, source identity, write paths, pages, app
 ├── data/
 │   ├── db/portfolio.db    # SQLite database (auto-created)
 │   └── logs/nivesa.log    # Application log (auto-created)

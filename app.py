@@ -33,13 +33,16 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from core.config import (  # noqa: E402
     ACCOUNTS, BOND_TYPES, COMPANY, DAY_COUNT_CONVENTIONS, PRODUCT_NAME, TAGLINE, VERSION,
 )
+from core.audit import audit_init  # noqa: E402
 from core.db import db_init  # noqa: E402
 from ui import book  # noqa: E402
 from ui.components import (  # noqa: E402
     WINDOWS, render_header, render_kpi_strip, render_nav_brand, render_section_header,
     render_outcome_grid, render_system_grid, render_ticker, render_top_bar, render_warning_box,
 )
+from ui.auth import open_notice, render_sign_out, require_login  # noqa: E402
 from ui.notices import drain_notifications, open_rail  # noqa: E402
+from ui.pages.page_audit import render_audit_page  # noqa: E402
 from ui.pages.page_add_security import render_add_security_page  # noqa: E402
 from ui.pages.page_cashflows import render_cashflows_page  # noqa: E402
 from ui.pages.page_edit_security import render_edit_security_page  # noqa: E402
@@ -73,7 +76,11 @@ PAGES = (
     ("Operations", "Add Security", ":material/library_add:", "add-security", render_add_security_page, False),
     ("Operations", "Edit Security", ":material/edit_note:", "edit-security", render_edit_security_page, False),
     ("Operations", "Edit Transaction", ":material/edit:", "edit-transaction", render_edit_transaction_page, False),
+    ("Operations", "Audit Trail", ":material/history:", "audit", render_audit_page, False),
 )
+
+#: Set by main() when the audit trail could not be switched on; the notice rail says so.
+_AUDIT_OK = True
 
 #: The page favicon — Tattva's mark pattern (a ring and a rising line), in the Paper cobalt.
 _FAVICON = (  # Tattva's exact tab icon (its cobalt ring-and-line mark), in Tattva's own
@@ -231,6 +238,7 @@ def _render_rail(ctx: dict) -> None:
                      help="Re-read the ledger from the database and recompute the book (clears the cache)."):
             book.clear()
             st.rerun()
+        render_sign_out()
         _render_appearance_control()
 
 
@@ -248,7 +256,10 @@ def _top_bar(ctx: dict, *, windowed: bool = False) -> None:
     meta.append(("As of", bar["as_of"]))
     render_top_bar(target=SCOPE, eyebrow="Book", value_text=bar["value"],
                    status_label=bar["chip"][0], status_tone=bar["chip"][1], meta_items=meta)
-    open_rail(drain_notifications() + list(ctx["notices"]))
+    audit = [] if _AUDIT_OK else [{"kind": "danger", "title": "Audit off",
+                                   "body": "The audit trail could not be switched on; changes are not being "
+                                           "recorded. See the log."}]
+    open_rail(drain_notifications() + audit + open_notice() + list(ctx["notices"]))
 
 
 def _safe_render(name: str, fn) -> None:
@@ -308,10 +319,14 @@ def main() -> None:
     st.session_state["theme"] = "light" if theme_choice() == "Paper" else "dark"
     inject_css(theme=st.session_state["theme"])
     _terminal()
+    if not require_login():
+        return
     # Read by default_chart_context: a panel's context line reads "ALL ACCOUNTS · 6M · units".
     st.session_state["active_target"] = SCOPE
     st.session_state.pop("_notice_slot", None)      # a slot belongs to the run that made it
     db_init()
+    global _AUDIT_OK
+    _AUDIT_OK = audit_init()
     ctx = book.shell_context()
     _render_rail(ctx)
     _render_pages()

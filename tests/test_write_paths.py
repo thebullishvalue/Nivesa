@@ -450,13 +450,22 @@ def _freeze(mp: pytest.MonkeyPatch, which: str, data: Path) -> None:
 _ID_COLS = {"bond_id", "transaction_id"}
 
 
+def _audit_object(name: str) -> bool:
+    return name.startswith("audit_") or name == "sqlite_sequence"
+
+
 def _snapshot(db: str, known: "set[str] | None" = None) -> dict:
     """Every table (and the schema), rows sorted; ids the base book does not know become ``<new-k>`` in
     order of appearance (deterministic in both apps, so this is a safeguard, not a mask)."""
     con = sqlite3.connect(db)
     try:
-        out = {"__schema__": sorted(con.execute("SELECT type, name, sql FROM sqlite_master").fetchall(), key=repr)}
+        # The 3.1 audit trail (its table, its triggers, AUTOINCREMENT's sqlite_sequence) is the new app's
+        # own addition and is tested in tests/test_audit.py; the book's tables must still match 2.8.0's.
+        out = {"__schema__": sorted((r for r in con.execute("SELECT type, name, sql FROM sqlite_master").fetchall()
+                                     if not _audit_object(r[1])), key=repr)}
         for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").fetchall():
+            if _audit_object(t):
+                continue
             cols = [r[1] for r in con.execute(f'PRAGMA table_info("{t}")').fetchall()]
             out[t] = (cols, con.execute(f'SELECT * FROM "{t}"').fetchall())
     finally:
