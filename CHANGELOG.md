@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.0.25] — 2026-11-24
+### Fixed
+- **Help icons show on Paper.** A widget's (?) is a ring that Streamlit strokes with its own colour, near-white at
+  60% from its static dark base, whatever colour the icon is given: on Paper the Account filter's hint, on
+  Positions, Issuers, Cashflows and Maturity, all but vanished. The family's fidelity block now makes the stroke
+  follow the colour, the quiet ink, brighter on hover.
+
+---
+
 ## [3.0.24] — 2026-11-23
 ### Fixed
 - **The chart window keeps its choice across pages.** The window control held the choice in its
