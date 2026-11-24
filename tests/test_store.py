@@ -319,3 +319,16 @@ def test_streamlit_cloud_without_a_store_warns(monkeypatch):
     assert us.notices()[0]["title"] == "Not kept"
     monkeypatch.setattr(us, "ON_STREAMLIT_CLOUD", False)
     assert us.notices() == []
+
+
+def test_first_start_with_an_empty_store_copies_the_ledger_there(app_with_store, apptest):
+    """The migration path: the store is empty and the server has the ledger — one run puts it there."""
+    gh = app_with_store
+    gh.files.clear()
+    at = apptest().run()
+    assert not at.exception
+    assert any("being copied there" in m.value for m in at.markdown)
+    assert len(gh.puts()) == 1 and "sha" not in gh.puts()[0][3]
+    assert "Alder Finance" in _issuers_bytes(gh.files["portfolio.db"], core.db.DB_FILE)
+    at.run()
+    assert not any("being copied there" in m.value for m in at.markdown) and len(gh.puts()) == 1

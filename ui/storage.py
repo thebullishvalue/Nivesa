@@ -24,7 +24,7 @@ from pathlib import Path
 import streamlit as st
 
 import core.db as _db
-from core.store import GitHubStore, Replica
+from core.store import GitHubStore, Replica, _has_securities
 from ui.components import render_header, render_notice_rail
 
 _LOCK = threading.Lock()
@@ -100,6 +100,10 @@ def notices() -> "list[dict]":
                              "the app. Set up [storage] in the app's secrets to keep the ledger in a private "
                              "GitHub repository."}]
         return []
+    if rep.created and _has_securities(_db.DB_FILE):
+        return [{"kind": "info", "title": "First save",
+                 "body": f"There was no {rep.store.path} in {rep.store.repo} yet, so this server's ledger is "
+                         f"being copied there. From now on every change is saved to it."}]
     if rep.created:
         return [{"kind": "warning", "title": "No ledger",
                  "body": f"There is no {rep.store.path} in {rep.store.repo} yet. To bring the existing ledger "

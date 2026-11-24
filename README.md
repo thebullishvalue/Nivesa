@@ -61,7 +61,9 @@ redeploy and every wake from sleep starts on a fresh disk), so a hosted Nivesa k
 after every change. Each save is a commit, so that repository's history is a backup of every state the
 ledger has been in.
 
-1. Create a **private** repository (e.g. `nivesa-data`) and upload `portfolio.db` to its root.
+1. Create a **private** repository (e.g. `nivesa-data`). Leave it empty: the first time the app starts
+   with the settings below, it copies the ledger it has into it. (Or upload `portfolio.db` to its root
+   yourself.)
 2. Create a [fine-grained token](https://github.com/settings/personal-access-tokens/new): *Only select
    repositories* → that repository; *Repository permissions* → **Contents: Read and write**. Nothing else.
 3. In the app's **Settings → Secrets** on Streamlit Cloud (or `.streamlit/secrets.toml` locally):

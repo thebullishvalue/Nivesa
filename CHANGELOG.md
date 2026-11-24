@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [3.2.0] — 2026-11-24
 ### Changed
-- **The ledger leaves this repository.** `data/db/portfolio.db` is no longer tracked (and is ignored), and
-  the golden snapshot that carried its figures is replaced. A hosted Nivesa keeps its ledger in a private
+- **The ledger moves to a private store.** The golden snapshot that carried the ledger's figures is
+  replaced. `data/db/portfolio.db` stays tracked only until the store holds the ledger — the first start
+  with `[storage]` set copies it there by itself when the store is empty — and is then removed with its
+  history. A hosted Nivesa keeps its ledger in a private
   GitHub repository (`[storage]` in secrets): it loads the file once per server start, before the
   database opens, and commits it back after any run that changed it — so edits survive Streamlit Cloud's
   restarts, and the repository's history is a backup of every state. A load that fails opens nothing
