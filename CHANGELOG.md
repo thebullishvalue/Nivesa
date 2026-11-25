@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 ### Docs
 - The guide's rail and Ledger rows say what they are now (the Ledger is every transaction; the Audit Trail is
   every change).
+### Checked
+- The family fidelity scan over all twelve pages in Paper and Slate at 1440, 1024, 834 and 390px: no finding and
+  no console error (it found 12 on 3.6.0, all on Paper: the checkbox's native border and the Audit Trail's raw
+  values). Type on the family's tiers, in its two faces. The sign-in page, the payment-terms forms with a
+  schedule, and the rail at 900px checked by eye in both widths. Tests: 260 passed, 5 skipped.
 
 ---
 
