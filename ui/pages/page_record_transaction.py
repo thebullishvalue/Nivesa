@@ -18,7 +18,7 @@ import pandas as pd
 import streamlit as st
 
 from core.config import ACCOUNTS, TRANSACTION_TYPES, logger
-from core.db import _connect, claim_face_adjustment, db_query, face_step_claimed, validate_ledger_chronology
+from core.db import _connect, claim_face_adjustment, db_query, face_step_claimed, validate_ledger
 from core.formatting import fmt_inr
 from ui.components import render_note, render_section_header
 from ui.notices import form_error, form_warning, set_notification
@@ -201,9 +201,9 @@ def render_record_transaction_page():
                         claim_face_adjustment(c, bid, tdate.isoformat(), tid, price)
 
                     # 5. Chronological balance check
-                    ok, offending_acct, offending_date = validate_ledger_chronology(bid, conn)
-                    if not ok:
-                        form_error(f"Transaction rejected. This would cause Account **{offending_acct}** to have negative holdings on {pd.to_datetime(offending_date).strftime('%d %b %Y')}.")
+                    problem = validate_ledger(bid, conn)
+                    if problem:
+                        form_error(f"Transaction rejected. {problem}")
                         st.stop()
                         
                     conn.commit()

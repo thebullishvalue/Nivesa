@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.6.0] — 2026-11-25
+### Fixed
+- **Every save keeps the whole ledger consistent.** One check, `core.db.validate_ledger`, runs inside the
+  transaction of every write — Record, Edit and Delete Transaction, and Record repayments — and rolls it
+  back when it fails: no account's holding goes negative (the 2.8.0 rule and message), no principal
+  repayment or interest receipt is booked to an account holding none of the bond on that date, and no
+  face value falls below zero. Deleting or moving a purchase that repayments depend on, and an interest
+  receipt for an account that never held the bond, were accepted before; they are now refused with the
+  reason.
+- **Edit Security saves in one transaction.** The bond's terms and its metadata were two separate writes:
+  a failure in the second left the first saved. Both now commit together or not at all.
+- **Face value follows the repayments.** Once a principal repayment has stepped a bond's face down, the
+  Face Value field on Edit Security is locked (with how to change it): typing a new face left the
+  repayments and the face disagreeing. A bond with no repayments recorded is edited as before.
+- **One warning per matured position.** A matured bond whose redemption is listed under Repayments due
+  (with its one-step record) is no longer listed again under Matured, not redeemed.
+### Changed
+- The Record, Edit Transaction and Edit Security save handlers are listed as amended in the source-identity
+  test; the write-path tests still prove every 2.8.0 scenario ends in the same book with the same message.
+
+---
+
 ## [3.5.0] — 2026-11-24
 Audit of the bond maths against the four platform cashflow statements (about 2,000 actual and scheduled
 payments over 56 positions): principal matched to the rupee before and after; interest was off by

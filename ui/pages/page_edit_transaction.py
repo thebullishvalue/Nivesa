@@ -18,7 +18,7 @@ import streamlit as st
 
 from core.config import ACCOUNTS, TRANSACTION_TYPES
 from core.db import (_connect, claim_face_adjustment, db_query, face_step_claimed, release_face_adjustment,
-                     validate_ledger_chronology)
+                     validate_ledger)
 from core.formatting import fmt_inr
 from ui.components import render_note, render_section_header
 from ui.notices import form_error, form_warning, set_notification
@@ -208,9 +208,9 @@ def render_edit_transaction_page():
                                 claim_face_adjustment(c, bond_id, td.isoformat(), tid, final_price)
 
                         # 5. Chronological balance check
-                        ok, offending_acct, offending_date = validate_ledger_chronology(bond_id, conn)
-                        if not ok:
-                            form_error(f"Transaction update rejected. This would cause Account **{offending_acct}** to have negative holdings on {pd.to_datetime(offending_date).strftime('%d %b %Y')}.")
+                        problem = validate_ledger(bond_id, conn)
+                        if problem:
+                            form_error(f"Transaction update rejected. {problem}")
                             st.stop()
                             
                         conn.commit()
@@ -236,9 +236,9 @@ def render_edit_transaction_page():
                     c.execute("DELETE FROM transactions WHERE transaction_id=?", (tid,))
 
                     # 5. Chronological balance check on deletion
-                    ok, offending_acct, offending_date = validate_ledger_chronology(bond_id, conn)
-                    if not ok:
-                        form_error(f"Transaction deletion rejected. This would cause Account **{offending_acct}** to have negative holdings on {pd.to_datetime(offending_date).strftime('%d %b %Y')}.")
+                    problem = validate_ledger(bond_id, conn)
+                    if problem:
+                        form_error(f"Transaction deletion rejected. {problem}")
                         st.stop()
                         
                     conn.commit()

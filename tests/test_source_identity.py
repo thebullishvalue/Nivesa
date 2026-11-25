@@ -194,7 +194,12 @@ def _sub(text: str) -> str:
 #: Handlers deliberately changed since 2.8.0. 3.4.0: Add Security takes the repayment schedule — checked
 #: before the security is created and saved with it (tests/test_schedule.py covers it; the write-path tests
 #: still prove an add without a schedule leaves the book exactly as 2.8.0 did).
-AMENDED_HANDLERS = {"page_add_security"}
+AMENDED_HANDLERS = {"page_add_security",
+                    # 3.6.0: every save runs core.db.validate_ledger (negative holdings — the 2.8.0 rule and
+                    # message — plus repayments or receipts booked to an account holding none, and a face
+                    # below zero); Edit Security writes both tables in one transaction. The write-path tests
+                    # still prove every 2.8.0 scenario ends in the same book with the same message.
+                    "page_record_transaction", "page_edit_transaction", "page_edit_security"}
 
 
 @pytest.mark.parametrize("orig,rel,new,marker", HANDLERS)

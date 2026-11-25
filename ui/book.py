@@ -70,9 +70,18 @@ def _shell(sig: tuple):  # noqa: ARG001 — the cache key
     return {
         "tape": views.tape_items(df),
         "bar": views.command_bar(df, totals),
-        "notices": views.book_notices(df) + views.due_repayment_notices(),
+        "notices": _notices(df),
         "empty": views.is_empty_book(df),
     }
+
+
+def _notices(df) -> list[dict]:
+    """The book's standing notices, a matured position listed once: under Repayments due when its
+    schedule has the redemption waiting to be recorded, else under Matured, not redeemed."""
+    from core.schedule import due_unrecorded
+    due = due_unrecorded()
+    keys = set(zip(due["bond_id"], due["account"])) if not due.empty else set()
+    return views.book_notices(df, exclude=keys) + views.due_repayment_notices()
 
 
 def load_book() -> "tuple[pd.DataFrame, dict]":

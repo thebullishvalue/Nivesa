@@ -459,13 +459,17 @@ def command_bar(df, totals: dict) -> dict:
     }
 
 
-def book_notices(df) -> list[dict]:
+def book_notices(df, exclude=()) -> list[dict]:
     """The book's standing notices: matured positions still carrying face (warning) and positions
-    maturing within 30 days (info). Each names the positions and the fix."""
+    maturing within 30 days (info). Each names the positions and the fix. ``exclude`` — (bond_id, account)
+    pairs whose redemption the Repayments-due notice already lists (3.6.0: one warning per position, the
+    one that can record it)."""
     if is_empty_book(df):
         return []
     notices: list[dict] = []
     m = df[matured_mask(df)].sort_values("maturity_date")
+    if len(exclude):
+        m = m[[(b, a) not in set(exclude) for b, a in zip(m["bond_id"], m["account"])]]
     if not m.empty:
         names = "; ".join(f"{r['issuer']} ({r['account']}, {pd.to_datetime(r['maturity_date']):%d %b %Y})"
                           for _, r in m.iterrows())

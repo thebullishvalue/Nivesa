@@ -7,12 +7,15 @@ handler verbatim; its messages and the retroactive-change caution land in the no
 
 from __future__ import annotations
 
+import sqlite3
+from contextlib import closing
+
 import pandas as pd
 import streamlit as st
 
 from core.bonds import calc_days_to_maturity
 from core.config import BOND_TYPES, CREDIT_RATINGS, DAY_COUNT_CONVENTIONS, FREQUENCIES, logger
-from core.db import db_execute, db_query, ensure_metadata
+from core.db import _connect, db_query, ensure_metadata
 from core.formatting import fmt_inr, fmt_pct
 from ui.components import render_note, render_section_header
 from ui.notices import form_error, form_warning, set_notification
@@ -77,7 +80,14 @@ def render_edit_security_page():
             freq = st.selectbox("Frequency", FREQUENCIES, index=FREQUENCIES.index(sec['frequency']))
         with c2:
             cpn = st.number_input("Coupon (%)", 0.0, 100.0, step=0.01, format="%.2f", value=sec['coupon_rate'] * 100)
-            fv = st.number_input("Face Value", step=100.0, value=sec['face_value'])
+            # Once a recorded repayment has stepped the face down, the face follows the ledger: typing a new
+            # one would leave the repayments and the face disagreeing (3.6.0). Correct the repayments instead.
+            stepped = not db_query("SELECT 1 FROM transactions WHERE bond_id=? AND transaction_type='Principal_Repayment' "
+                                   "LIMIT 1", (bid,)).empty
+            fv = st.number_input("Face Value", step=100.0, value=sec['face_value'], disabled=stepped,
+                                 help=("Set by the principal repayments recorded against this bond — to change it, "
+                                       "edit or delete those repayments under Edit Transaction.") if stepped else
+                                      "Face value per bond today.")
             btype = st.selectbox(
                 "Bond Type", BOND_TYPES,
                 index=_safe_index(BOND_TYPES, meta['bond_type'] if meta is not None else None),
@@ -113,14 +123,22 @@ def render_edit_security_page():
             elif idate is not None and mat <= idate:
                 form_error("Maturity date must be after the issue date.")
             else:
-                db_execute(
-                    "UPDATE securities SET issuer=?, maturity_date=?, frequency=?, coupon_rate=?, face_value=? WHERE bond_id=?",
-                    (issuer, mat.isoformat(), freq, cpn / 100, fv, bid),
-                )
-                db_execute(
-                    "UPDATE security_metadata SET bond_type=?, credit_rating=?, day_count=?, issue_date=?, listing=?, sector=?, notes=? WHERE bond_id=?",
-                    (btype, cr, dc, idate.isoformat() if idate else None, listing, sector, notes, bid),
-                )
+                # Both tables in ONE transaction (3.6.0): the two separate writes could leave the terms
+                # changed and the metadata not, if the second failed.
+                try:
+                    with closing(_connect()) as conn, conn:
+                        conn.execute(
+                            "UPDATE securities SET issuer=?, maturity_date=?, frequency=?, coupon_rate=?, face_value=? WHERE bond_id=?",
+                            (issuer, mat.isoformat(), freq, cpn / 100, fv, bid),
+                        )
+                        conn.execute(
+                            "UPDATE security_metadata SET bond_type=?, credit_rating=?, day_count=?, issue_date=?, listing=?, sector=?, notes=? WHERE bond_id=?",
+                            (btype, cr, dc, idate.isoformat() if idate else None, listing, sector, notes, bid),
+                        )
+                except sqlite3.Error as e:
+                    form_error(f"Update failed: {e}")
+                    logger.error(f"Security update failed: {e}")
+                    st.stop()
                 set_notification(f"**{issuer}** updated!", "success")
                 logger.info(f"Updated security: {bid}")
                 st.rerun()

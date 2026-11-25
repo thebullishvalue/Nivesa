@@ -199,3 +199,31 @@ def release_face_adjustment(c, bond_id, trade_date, tid, price):
         f_tid, f_price = follower
         c.execute("UPDATE securities SET face_value = face_value - ? WHERE bond_id=?", (f_price, bond_id))
         c.execute("UPDATE transactions SET owns_face_adj=1 WHERE transaction_id=?", (f_tid,))
+
+
+def validate_ledger(bond_id, conn):
+    """Every rule a bond's ledger must keep after a write, checked inside the write's transaction (3.6.0).
+    Returns None, or what is wrong in words — the write is then rolled back.
+
+      · no account's running balance of units goes below zero (``validate_ledger_chronology``, the 2.8.0
+        rule and message);
+      · no principal repayment or interest receipt is booked to an account that held none of the bond on
+        that date (a deleted or moved purchase, or an entry against the wrong account, left them orphaned);
+      · the bond's face value per unit never falls below zero."""
+    ok, acct, when = validate_ledger_chronology(bond_id, conn)
+    if not ok:
+        return (f"This would cause Account **{acct}** to have negative holdings on "
+                f"{pd.to_datetime(when).strftime('%d %b %Y')}.")
+    rows = conn.execute(
+        "SELECT account, trade_date, transaction_type, units FROM transactions WHERE bond_id=?", (bond_id,)).fetchall()
+    for acct, d, tt, _u in sorted(rows, key=lambda r: r[1]):
+        if tt in ("Principal_Repayment", "Interest_Receipt"):
+            held = sum(u for a, td, t, u in rows if a == acct and t in ("Buy", "Sell") and td <= d)
+            if held <= 1e-9:
+                what = "a principal repayment" if tt == "Principal_Repayment" else "an interest receipt"
+                return (f"Account **{acct}** would have {what} on {pd.to_datetime(d).strftime('%d %b %Y')} "
+                        f"without holding the bond.")
+    face = conn.execute("SELECT face_value FROM securities WHERE bond_id=?", (bond_id,)).fetchone()
+    if face is not None and face[0] < -0.01:
+        return "The repayments would take the bond's face value below zero."
+    return None

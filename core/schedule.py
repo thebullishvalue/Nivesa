@@ -26,7 +26,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from core.config import logger
-from core.db import _connect, claim_face_adjustment, db_query, validate_ledger_chronology
+from core.db import _connect, claim_face_adjustment, db_query, validate_ledger
 
 _TABLE = """
 CREATE TABLE IF NOT EXISTS redemption_schedule (
@@ -250,13 +250,9 @@ def record_due(rows: pd.DataFrame) -> "tuple[bool, str]":
                            float(r["principal_per_unit"]), float(r["amount"]), "Scheduled instalment"))
                 claim_face_adjustment(c, r["bond_id"], d, tid, float(r["principal_per_unit"]))
             for bid in rows["bond_id"].unique():
-                ok, acct, when = validate_ledger_chronology(bid, conn)
-                if not ok:
-                    raise sqlite3.IntegrityError(f"{acct} would hold negative units on {when}")
-            face = c.execute("SELECT MIN(face_value) FROM securities WHERE bond_id IN (%s)"
-                             % ",".join("?" * rows["bond_id"].nunique()), tuple(rows["bond_id"].unique())).fetchone()[0]
-            if face is not None and face < -0.01:
-                raise sqlite3.IntegrityError("a face value would fall below zero — check the schedule")
+                problem = validate_ledger(bid, conn)       # the same rules every form's save keeps
+                if problem:
+                    raise sqlite3.IntegrityError(problem.replace("**", ""))
         n = len(rows)
         logger.info(f"Recorded {n} scheduled repayment(s)")
         return True, f"{n} repayment{'s' if n != 1 else ''} recorded"
