@@ -27,6 +27,7 @@ import pandas as pd
 
 from core.config import logger
 from core.db import _connect, claim_face_adjustment, db_query, validate_ledger
+from core.formatting import fmt_inr
 
 _TABLE = """
 CREATE TABLE IF NOT EXISTS redemption_schedule (
@@ -180,11 +181,11 @@ def check(rows, *, face: float, issue: "date | None", maturity: date,
         errors.append(f"a date falls on or before the issue date ({issue:%d %b %Y})")
     ahead = sum(a for d, a in rows if d > today)
     if face > 0 and ahead > face + 0.5:
-        errors.append(f"the instalments still to come add up to ₹{ahead:,.2f}, more than the current face of "
-                      f"₹{face:,.2f}")
+        errors.append(f"the instalments still to come add up to {fmt_inr(ahead)}, more than the current face of "
+                      f"{fmt_inr(face)}")
     elif face > 0 and face - ahead > 0.5:
-        warnings.append(f"the instalments still to come add up to ₹{ahead:,.2f} of a ₹{face:,.2f} face; the "
-                        f"remaining ₹{face - ahead:,.2f} is treated as repaid at maturity")
+        warnings.append(f"the instalments still to come add up to {fmt_inr(ahead)} of a {fmt_inr(face)} face; the "
+                        f"remaining {fmt_inr(face - ahead)} is treated as repaid at maturity")
     return errors, warnings
 
 

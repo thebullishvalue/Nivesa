@@ -2674,10 +2674,55 @@
 [data-testid="stBaseButton-primaryFormSubmit"]:hover {
     background: #3D6BDC; border-color: #3D6BDC; color: #FFFFFF;
 }
-/* Checkbox (the fat-finger price confirmation). */
+/* Checkbox (the fat-finger price confirmation, "Fill equal instalments instead"). The label is the
+   option itself, so it reads in the reading face, in sentence case: the widget-caption rule (uppercase
+   mono) reached it through Streamlit's label wrapper. The box is painted from tokens: Streamlit drew an
+   unchecked box from its static dark base, a near-black square on Paper. */
+[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p,
 [data-testid="stCheckbox"] label p {
-    font-family: var(--sans) !important; font-size: var(--fs-sm) !important;
+    font-family: var(--sans) !important; font-size: var(--fs-sm) !important; font-weight: 500 !important;
+    text-transform: none !important; letter-spacing: 0 !important;
     color: var(--ink-secondary) !important;
+}
+[data-testid="stCheckbox"] label[data-baseweb="checkbox"]:not(:has(input:checked)) > span:first-child {
+    background: var(--bg) !important; border-color: var(--line-strong) !important;
+}
+[data-testid="stCheckbox"] label[data-baseweb="checkbox"]:has(input:checked) > span:first-child {
+    background-color: var(--accent) !important; border-color: var(--accent) !important;
+}
+/* In a row of captioned fields (the equal-instalments row) the checkbox sits on the fields' line, not
+   on their captions' line. */
+[data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [data-testid="stCheckbox"]):has(> [data-testid="stColumn"] [data-testid="stWidgetLabel"] + div input) {
+    align-items: flex-end !important;
+}
+[data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [data-testid="stWidgetLabel"] + div input) > [data-testid="stColumn"]:has([data-testid="stCheckbox"]) [data-testid="stCheckbox"] {
+    min-height: 38px; display: flex; align-items: center;
+}
+
+/* The sign-in form: a password field and its button, at a password's width, not the page's. The
+   field is one well with its show/hide button inside it (the family's border sits on the <input>,
+   which left the button outside the box), and the "Press Enter to submit form" hint, which ran under
+   the button, is not drawn. */
+[data-testid="stForm"]:has(input[type="password"]) { max-width: 440px; }
+[data-testid="stForm"]:has(input[type="password"]) [data-testid="InputInstructions"] { display: none !important; }
+.stTextInput [data-baseweb="base-input"]:has(input[type="password"]) {
+    background: var(--bg) !important; border: 1px solid var(--line-strong) !important;
+    border-radius: var(--r-md) !important; overflow: hidden;
+}
+.stTextInput [data-baseweb="base-input"]:has(input[type="password"]):focus-within { border-color: var(--accent) !important; }
+.stTextInput [data-baseweb="base-input"] input[type="password"],
+.stTextInput [data-baseweb="base-input"]:has(input[type="password"]) input {
+    border: none !important; background: transparent !important; box-shadow: none !important;
+    outline: none !important;           /* the well's accent border is the focus mark */
+}
+.stTextInput [data-baseweb="base-input"]:has(input[type="password"]) button { color: var(--ink-tertiary) !important; }
+
+/* The rail with twelve pages and the Session block stands about 925px tall (975px with Sign out), so
+   the family's pinned appearance switch (pinned on desktops 820px and taller) sat over the Refresh
+   button on a 900px screen. Nivesa pins it from 1000px; below that it is the rail's last item. */
+@media (min-width: 1025px) and (max-height: 999.98px) {
+    html body [data-testid="stSidebarContent"] [data-testid="stLayoutWrapper"]:has(> .st-key-appearance) { position: static !important; }
+    html body [data-testid="stSidebarContent"] [data-testid="stLayoutWrapper"]:has(> .st-key-appearance)::before { content: none !important; }
 }
 
 /* The selected security's terms, read back above the form: one k/v strip. */

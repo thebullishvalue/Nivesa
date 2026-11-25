@@ -321,6 +321,7 @@ def main() -> None:
     inject_css(theme=st.session_state["theme"])
     _terminal()
     if not require_login():
+        _render_footer()                # the sign-in page ends on the family footer, as every page does
         return
     # The book's home is the private store when one is set up (ui.storage): load it before the database
     # is opened, and never open a stale or empty copy when it cannot be loaded.

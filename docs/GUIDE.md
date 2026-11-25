@@ -15,8 +15,9 @@ into a drop-down: messages and caveats appear in the notice rail under the comma
 command bar (the book, its cost, weighted yield to cost, duration, positions, as-of, and a chip:
 CURRENT, or how many bonds have matured without their redemption recorded) → the notice rail
 (form results, positions maturing within 30 days, matured-but-unredeemed bonds) → the page.
-**The rail** holds the pages and the controls: Session (Refresh) → Appearance, pinned to the
-rail's foot. The book itself is on every page's command bar.
+**The rail** holds the pages and the controls: Session (Refresh, and Sign out when a password is set) →
+Appearance, pinned to the rail's foot on a desktop at least 1000px tall and the rail's last item elsewhere
+(twelve pages and the Session block stand about 925px). The book itself is on every page's command bar.
 
 | Section | Page | What it answers |
 |---|---|---|
@@ -26,7 +27,7 @@ rail's foot. The book itself is on every page's command bar.
 | | **Maturity** | When does capital come back? Principal by when it is repaid (instalments on their own dates), average life against final maturity, and every bond by final maturity. |
 | | **Issuers** | Where is the book concentrated? Issuer weights (amber at 5% of cost, red at 10%) and issuer detail. |
 | Operations | **Record Transaction** | Buy, Sell, Interest Receipt, Principal Repayment. |
-| | **Ledger** | The audit trail, filtered and windowed, with CSV and Excel export. |
+| | **Ledger** | Every transaction, filtered and windowed, with CSV and Excel export. |
 | | **Securities** | The securities master, with export. |
 | | **Add Security** · **Edit Security** · **Edit Transaction** | Maintain the master and correct the ledger. Both security forms take the bond's **repayment schedule**. |
 | | **Audit Trail** | Who changed what? Every add, edit and delete, newest first, with CSV export. |

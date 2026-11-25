@@ -34,7 +34,7 @@ def render_schedule_editor(bid: str, sec, meta) -> None:
     due = due[due["bond_id"] == bid] if not due.empty else due
 
     if cur.empty:
-        render_note(f"No schedule: the whole face (₹{face:,.2f} per bond at issue) is treated as repaid at maturity, "
+        render_note(f"No schedule: the whole face ({fmt_inr(face)} per bond at issue) is treated as repaid at maturity, "
                     f"or on the pattern of the repayments already recorded. If this bond repays in instalments, "
                     f"enter them below from its offer document or the platform it was bought on.")
     else:
@@ -49,7 +49,7 @@ def render_schedule_editor(bid: str, sec, meta) -> None:
         })
         total = float(cur["principal_per_unit"].sum())
         render_table_panel(
-            view, "schedule", context=f"REDEMPTION SCHEDULE · {len(view)} instalments · ₹{total:,.2f} of ₹{face:,.2f} "
+            view, "schedule", context=f"REDEMPTION SCHEDULE · {len(view)} instalments · {fmt_inr(total)} of {fmt_inr(face)} "
                                       f"per bond · {cur['source'].iloc[0] or 'entered'}",
             max_height=360, label_col="due",
             col_labels={"due": "Due", "per_bond": "Per bond", "share": "Of face", "status": "Status"},

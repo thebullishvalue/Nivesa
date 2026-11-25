@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ---
 
+## [3.6.1] — 2026-11-25 — *3.1 to 3.6 in the family's form*
+### Fixed
+- **The Audit Trail reads in the ledger's words.** It printed column names and raw values ("redemption_schedule
+  added", "credit_rating: Unrated → A", "principal_per_unit: 25000.0; notes: None"). Each change now reads as
+  the forms name it: "Instalment added", "Payment terms added", "Credit rating: Unrated → A", "Due: 24 Dec 2031 ·
+  Per bond: ₹25,000.00 · Source: IM p.14", "Interest paid on: 20th"; rupees Indian-grouped, dates as the book
+  writes them, the coupon in percent, empty fields and internal ids left out.
+- **The repayment schedule groups rupees the Indian way.** Its table heading and messages wrote "₹100,000.00"
+  where every other figure in the book reads "₹1,00,000.00"; they now use the book's own formatter.
+- **The Maturity ladder's legend matches its bars.** Plotly draws a bar series' swatch from its first bar, the
+  amber Matured bucket, so "Face Value" was keyed amber over cyan bars. The legend now names each colour once:
+  Principal (cyan, as the page's text calls it), Cost Basis (slate) and, when there is one, Matured (amber).
+- **The equal-instalments checkbox (Add and Edit Security) is the family's.** On Paper its box was Streamlit's
+  near-black square, its label an uppercase caption, and it sat on its row's caption line. The box is painted
+  from tokens, the label reads in sentence case in the reading face, and it sits on the fields' line.
+- **The sign-in form fits a password.** The show/hide button sat outside the field's border, "Press Enter to
+  submit form" ran under it, and the field spanned the page. The field is one well with its button inside, the
+  hint is not drawn, the form is a password's width, and the page ends on the family footer.
+- **The rail's Refresh button is never half-hidden.** Twelve pages and the Session block stand about 925px
+  (975px with Sign out), so on a 900px screen the family's pinned appearance switch covered the button's lower
+  edge. Nivesa pins the switch from 1000px tall; below that it is the rail's last item.
+### Docs
+- The guide's rail and Ledger rows say what they are now (the Ledger is every transaction; the Audit Trail is
+  every change).
+
+---
+
 ## [3.6.0] — 2026-11-25
 ### Fixed
 - **Every save keeps the whole ledger consistent.** One check, `core.db.validate_ledger`, runs inside the

@@ -15,11 +15,59 @@ import streamlit as st
 
 from core.audit import audit_entries
 from core.db import db_query
+from core.formatting import fmt_inr
 from ui.components import render_empty_state, render_note, render_section_header, render_table_panel
 
 _LIMIT = 500
-_TABLE = {"transactions": "Transaction", "securities": "Security", "security_metadata": "Security details"}
+_TABLE = {"transactions": "Transaction", "securities": "Security", "security_metadata": "Security details",
+          "bond_terms": "Payment terms", "redemption_schedule": "Instalment"}
 _ACTION = {"INSERT": "Added", "UPDATE": "Changed", "DELETE": "Deleted"}
+
+# A change reads in the ledger's own words, as the forms name each field, never as a column name: "Credit rating:
+# Unrated → A", not "credit_rating: Unrated → A"; rupees Indian-grouped, dates as the book writes them, the coupon in
+# percent, nothing for an empty field, and no internal ids.
+_FIELD = {
+    "account": "Account", "trade_date": "Date", "transaction_type": "Type", "units": "Units", "price": "Price",
+    "amount": "Amount", "notes": "Notes", "issuer": "Issuer", "isin": "ISIN", "maturity_date": "Maturity",
+    "frequency": "Frequency", "coupon_rate": "Coupon", "face_value": "Face value", "bond_type": "Bond type",
+    "credit_rating": "Credit rating", "day_count": "Day count", "issue_date": "Issue date", "call_date": "Call date",
+    "put_date": "Put date", "listing": "Listing", "sector": "Sector", "coupon_day": "Interest paid on",
+    "due_date": "Due", "principal_per_unit": "Per bond", "source": "Source",
+}
+_HIDDEN = {"bond_id", "transaction_id", "schedule_id", "owns_face_adj"}
+_MONEY = {"price", "amount", "face_value", "principal_per_unit"}
+
+
+def _day(v) -> str:
+    d = int(v)
+    if d >= 31:
+        return "last day of the month"
+    return f"{d}{'st' if d in (1, 21) else 'nd' if d in (2, 22) else 'rd' if d in (3, 23) else 'th'}"
+
+
+def _value(k: str, v) -> str:
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return "—"
+    try:
+        if k in _MONEY:
+            return fmt_inr(float(v))
+        if k == "coupon_rate":
+            return f"{float(v) * 100:.2f}%"
+        if k == "units":
+            return f"{float(v):,.0f}" if float(v).is_integer() else f"{float(v):,.4f}".rstrip("0")
+        if k == "coupon_day":
+            return _day(v)
+        if k.endswith("_date"):
+            return pd.Timestamp(v).strftime("%d %b %Y")
+        if k == "transaction_type":
+            return str(v).replace("_", " ").capitalize()
+    except (TypeError, ValueError):
+        pass
+    return str(v)
+
+
+def _pair(k: str, v) -> str:
+    return f"{_FIELD.get(k, k.replace('_', ' ').capitalize())}: {_value(k, v)}"
 
 
 def _load(s) -> dict:
@@ -42,10 +90,11 @@ def _subject(row, issuers: dict) -> str:
 def _changes(row) -> str:
     old, new = _load(row["old_row"]), _load(row["new_row"])
     if row["action"] == "UPDATE":
-        return "; ".join(f"{k}: {old.get(k)} → {new.get(k)}" for k in new if old.get(k) != new.get(k))
+        return " · ".join(f"{_FIELD.get(k, k)}: {_value(k, old.get(k))} → {_value(k, new.get(k))}"
+                          for k in new if k not in _HIDDEN and old.get(k) != new.get(k))
     r = new or old
     keep = ("units", "price", "amount") if row["table_name"] == "transactions" else tuple(r)
-    return "; ".join(f"{k}: {r[k]}" for k in keep if k in r and k not in ("bond_id", "transaction_id"))
+    return " · ".join(_pair(k, r[k]) for k in keep if k in r and k not in _HIDDEN and r[k] not in (None, ""))
 
 
 def render_audit_page() -> None:

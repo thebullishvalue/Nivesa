@@ -5,7 +5,7 @@ Reading order (Tattva's house grammar): ANSWER → ANCHOR → EVIDENCE → DETAI
   1. The answer for the whole book, with live numbers, and its KPI strip — weighted duration, average
      maturity, the next maturity, principal due in twelve months, matured positions not yet redeemed.
   2. The Ladder — the Account filter (2.8.0's "Filter by Account") directly above the 2.8.0 maturity
-     ladder it filters: face (cyan) and cost (slate) per bucket, Matured in amber; then the 2.8.0 table,
+     ladder it filters: principal (cyan) and cost (slate) per bucket, Matured in amber; then the 2.8.0 table,
      bond by bond, in ladder order.
 Every figure comes from ``core.views`` (``maturity_ladder``, ``maturity_rows``, ``next_maturities``,
 ``matured_mask``, ``cashflow_projection`` / ``nearterm_cashflows`` / ``cashflow_totals``) or the
@@ -108,15 +108,23 @@ def _ladder_figure(buckets):
     x = list(buckets.index)
     fig = go.Figure()
     face_hues = [chart_color("amber") if b == "Matured" else chart_color("cyan") for b in x]
-    for col, name, hues in (("Face", "Face Value", face_hues), ("Cost", "Cost Basis", chart_color("slate"))):
+    for col, name, hues in (("Face", "Principal", face_hues), ("Cost", "Cost Basis", chart_color("slate"))):
         vals = buckets[col].tolist()
         fig.add_trace(go.Bar(
             x=x, y=[v / 1e5 for v in vals], name=name, marker_color=hues, marker_line_width=0,
             text=[fmt_inr_short(v) for v in vals], textposition="outside", cliponaxis=False,
             textfont=dict(size=9, family="JetBrains Mono, monospace", color=chart_color("slate")),
             customdata=[[fmt_inr(v)] for v in vals],
-            hovertemplate=f"{name}: %{{customdata[0]}}<extra></extra>",
+            hovertemplate=f"{name}: %{{customdata[0]}}<extra></extra>", showlegend=False,
         ))
+    # The legend names each colour once. Plotly draws a bar trace's swatch from its first bar, which is the amber
+    # Matured bucket whenever there is one: the legend then called the cyan principal bars amber.
+    keys = [("Principal", chart_color("cyan")), ("Cost Basis", chart_color("slate"))]
+    if "Matured" in x:
+        keys.append(("Matured", chart_color("amber")))
+    for name, hue in keys:
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", name=name, hoverinfo="skip",
+                                 marker=dict(symbol="square", size=10, color=hue)))
     fig.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE), barmode="group", bargap=0.3,
                       bargroupgap=0.06, legend_traceorder="normal")
     style_axes(fig, y_title="₹ lakh")
